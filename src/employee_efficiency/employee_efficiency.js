@@ -66,15 +66,12 @@ function App() {
                 isCrossPosition,
             } = values
 
-            // setEfficiencyData([{employeeName:"abc", properties:{itemNum:123}}])
-
             const response = await fetch(`/api/v1/efficiency/employee?workplaceCode=${workplaceCode}&employeeNumber=${employeeNumber ? employeeNumber : ''}&startDate=${dateRange[0].format(dateFormat)}&endDate=${dateRange[1].format(dateFormat)}&aggregateDimension=${aggregateDimension}&isCrossPosition=${isCrossPosition}`);
             if (!response.ok) {
                 throw new Error(`请求失败: ${response.status}`);
             }
             const data = await response.json();
 
-            debugger
 
             setEfficiencyData(data.data.tableDataList)
             setColumns(data.data.columns)
