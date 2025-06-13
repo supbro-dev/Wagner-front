@@ -118,10 +118,7 @@ function App() {
                     </Breadcrumb>
 
                     {/* 查询条件卡片 */}
-                    <Card
-                        style={{ marginBottom: 24 }}
-                        headStyle={{ background: '#fafafa', borderBottom: 'none' }}
-                    >
+                    <Card>
                         <Form
                             form={form}
                             // layout="inline"
