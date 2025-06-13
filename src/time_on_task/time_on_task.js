@@ -59,15 +59,6 @@ function initGantt(ganttContainer, isGanttInitialized, operateDay, ganttContaine
         }
     };
 
-    // window.gantt.templates.task_row_class = function(start, end, task) {
-    //     switch (task.actionType) {
-    //         case "排班":
-    //             return 'scheduling-row'
-    //         default:
-    //             return 'default-row'
-    //     }
-    // };
-
     gantt.config.start_date = new Date(operateDay);
     gantt.config.end_date = new Date(operateDay).setDate(gantt.config.start_date.getDate() + 1);
 
@@ -90,8 +81,8 @@ function initGantt(ganttContainer, isGanttInitialized, operateDay, ganttContaine
 
     const secondGridColumns = {
         columns: [
-            {name: "duration", label: "持续时间(分钟)", min_width: "120", align: "center"},
             {name: "workLoadDesc", label: "工作量", min_width: "120", align: "center"},
+            {name: "duration", label: "持续时间(分钟)", min_width: "120", align: "center"},
         ]
     };
 
@@ -153,7 +144,6 @@ function initData(data) {
                 endTime: dayjs(new Date(data.scheduling.endTime)).format(timeFormat),
                 start_date: dayjs(new Date(data.scheduling.startTime)).format(dateTimeFormat),
                 duration: getMinutes(new Date(data.scheduling.startTime), new Date(data.scheduling.endTime)),
-                open: true,
             })
     }
 
@@ -170,7 +160,6 @@ function initData(data) {
                 endTime: dayjs(new Date(data.attendance.endTime)).format(timeFormat),
                 start_date: dayjs(new Date(data.attendance.startTime)).format(dateTimeFormat),
                 duration: getMinutes(new Date(data.attendance.startTime), new Date(data.attendance.endTime)),
-                open: true,
             })
     }
 
@@ -187,7 +176,7 @@ function initData(data) {
                     endTime: dayjs(new Date(processDuration.endTime)).format(timeFormat),
                     start_date: dayjs(new Date(processDuration.startTime)).format(dateTimeFormat),
                     duration: processDuration.duration,
-                    open: true,
+                    workLoadDesc: processDuration.workLoadDesc,
                 }
             )
         }
