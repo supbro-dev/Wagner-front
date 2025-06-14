@@ -36,3 +36,30 @@
     transform: rotate(360deg);
   }
 }
+
+.scheduling-row {
+  font-weight: bold !important;
+  background: #d0aa7c !important;
+}
+
+.attendance-row {
+  font-weight: bold !important;
+  background: #47abb8 !important;
+}
+
+.direct-work-row {
+  font-weight: bold !important;
+  background: #3b9a3c !important;
+}
+
+.indirect-work-row {
+  font-weight: bold !important;
+  background: #d6b221 !important;
+}
+
+.idle-row {
+  font-weight: bold !important;
+  background: black !important;
+}
+
+

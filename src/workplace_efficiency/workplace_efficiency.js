@@ -3,7 +3,7 @@ import {
     Breadcrumb,
     Button,
     Card,
-    Col,
+    Col, ConfigProvider, DatePicker,
     Form,
     Input,
     Layout,
@@ -17,85 +17,18 @@ import {
 } from 'antd';
 import '../App.css';
 import {Content, Header} from "antd/es/layout/layout";
-import {Footer} from "antd/es/modal/shared";
+import dayjs from "dayjs";
+import locale from 'antd/locale/zh_CN';
+import 'dayjs/locale/zh-cn';
 
-const columns = [
-    {
-        title: 'Name',
-        dataIndex: 'name',
-        key: 'name',
-        render: text => <a>{text}</a>,
-    },
-    {
-        title: 'Age',
-        dataIndex: 'age',
-        key: 'age',
-    },
-    {
-        title: 'Address',
-        dataIndex: 'address',
-        key: 'address',
-    },
-    {
-        title: 'Tags',
-        key: 'tags',
-        dataIndex: 'tags',
-        render: (_, { tags }) => (
-            <>
-                {tags.map(tag => {
-                    let color = tag.length > 5 ? 'geekblue' : 'green';
-                    if (tag === 'loser') {
-                        color = 'volcano';
-                    }
-                    return (
-                        <Tag color={color} key={tag}>
-                            {tag.toUpperCase()}
-                        </Tag>
-                    );
-                })}
-            </>
-        ),
-    },
-    {
-        title: 'Action',
-        key: 'action',
-        render: (_, record) => (
-            <Space size="middle">
-                <a>Invite {record.name}</a>
-                <a>Delete</a>
-            </Space>
-        ),
-    },
-];
-const data = [
-    {
-        key: '1',
-        name: 'John Brown',
-        age: 32,
-        address: 'New York No. 1 Lake Park',
-        tags: ['nice', 'developer'],
-    },
-    {
-        key: '2',
-        name: 'Jim Green',
-        age: 42,
-        address: 'London No. 1 Lake Park',
-        tags: ['loser'],
-    },
-    {
-        key: '3',
-        name: 'Joe Black',
-        age: 32,
-        address: 'Sydney No. 1 Lake Park',
-        tags: ['cool', 'teacher'],
-    },
-];
-const layoutStyle = {
-    borderRadius: 8,
-    overflow: 'hidden',
-    width: 'calc(50% - 8px)',
-    maxWidth: 'calc(50% - 8px)',
-};
+const { RangePicker } = DatePicker;
+
+dayjs.locale('zh-cn');
+
+
+const dateFormat = 'YYYY-MM-DD'
+const customFormat = value => `${value.format(dateFormat)}`;
+
 
 function App() {
     const [loading, setLoading] = useState(false);
@@ -103,6 +36,8 @@ function App() {
     const [form] = Form.useForm();
     const [isSearching, setIsSearching] = useState(false);
     const [workplaces, setWorkplaces] = useState([]);
+    const [efficiencyData, setEfficiencyData] = useState([]);
+    const [columns, setColumns] = useState([])
 
     const fetchWorkplace = async () => {
         try {
@@ -119,14 +54,26 @@ function App() {
     }
 
 
-    const fetchData = async () => {
+
+    const fetchData =  async (values) => {
         setLoading(true);
         try {
-            const response = await fetch('/api/v1/efficiency/compute?employeeNumber=A1001&operateDay=2025-05-28');
+            const {
+                workplaceCode,
+                dateRange,
+                isCrossPosition,
+            } = values
+
+            const response = await fetch(`/api/v1/efficiency/workplace?workplaceCode=${workplaceCode}&startDate=${dateRange[0].format(dateFormat)}&endDate=${dateRange[1].format(dateFormat)}&isCrossPosition=${isCrossPosition}`);
             if (!response.ok) {
                 throw new Error(`请求失败: ${response.status}`);
             }
             const data = await response.json();
+
+            let dataList = [data.data.root]
+            setEfficiencyData(dataList)
+            setColumns(data.data.columns)
+
             console.log('后端返回数据:', data);
         } catch (error) {
             console.error('请求出错:', error);
@@ -164,53 +111,72 @@ function App() {
                             <span>人效管理</span>
                         </Breadcrumb.Item>
                         <Breadcrumb.Item>
-                            <strong>个人人效</strong>
+                            <strong>工作点人效</strong>
                         </Breadcrumb.Item>
                     </Breadcrumb>
 
                     {/* 查询条件卡片 */}
-                    <Card
-                        style={{ marginBottom: 24 }}
-                        headStyle={{ background: '#fafafa', borderBottom: 'none' }}
-                    >
+                    <Card>
                         <Form
                             form={form}
-                            layout="vertical"
+                            // layout="inline"
                             onFinish={fetchData}
+
+                            size={'middle'}
+                            autoComplete="off"
+                            initialValues={{
+                                dateRange: [ // 这里的字段名对应RangePicker的name
+                                    dayjs(dayjs().add(-3, 'day'), dateFormat), dayjs(dayjs(), dateFormat)
+                                ],
+                                aggregateDimension: 'process',
+                                isCrossPosition: 'all',
+                            }}
                         >
                             <Row gutter={24}>
-                                <Col xs={24} sm={12} md={8} lg={6}>
-                                    <Form.Item label="工作点" name="workPoint">
-                                        <Select
-                                            placeholder="请选择工作点"
-                                            allowClear
-                                            options={workplaces}
-                                        >
+                                <Col xs={12} sm={6} md={4} lg={4}>
+                                    <ConfigProvider locale={locale}>
+                                        <Form.Item label="工作点" name="workplaceCode" rules={[{ required: true, message: '工作点必选' }]}>
 
-                                        </Select>
-                                    </Form.Item>
+                                            <Select
+                                                placeholder="请选择工作点"
+                                                allowClear
+                                                options={workplaces}
+                                            >
+                                            </Select>
+                                        </Form.Item>
+                                    </ConfigProvider>
                                 </Col>
 
-                                <Col xs={24} sm={12} md={8} lg={6}>
-                                    <Form.Item label="员工工号" name="employeeId">
-                                        <Input
-                                            placeholder="请输入员工工号"
-                                            allowClear
-                                        />
-                                    </Form.Item>
+                                <Col xs={8} sm={8} md={8} lg={8}>
+                                    <ConfigProvider locale={locale}>
+                                        <Form.Item label="时间段" name="dateRange" rules={[{ required: true, message: '时间段必选' }]}>
+                                            <RangePicker
+                                                placeholder="请选择时间段"
+                                                format={customFormat}
+                                            />
+                                        </Form.Item>
+                                    </ConfigProvider>
                                 </Col>
 
-                                <Col xs={24} sm={12} md={8} lg={6}>
-                                    <Form.Item label="员工姓名" name="employeeName">
-                                        <Input
-                                            placeholder="请输入员工姓名"
-                                            allowClear
-                                        />
-                                    </Form.Item>
+                                <Col xs={12} sm={6} md={6} lg={4}>
+                                    <ConfigProvider locale={locale}>
+                                        <Form.Item label="是否跨岗支援" name="isCrossPosition" rules={[{ required: true, message: '是否跨岗支援必选' }]}>
+                                            <Select
+                                                placeholder="请选择"
+                                                allowClear
+                                                options={[
+                                                    {label:'是', value:"cross"},
+                                                    {label:'否', value:"noCross"},
+                                                    {label:'都包括', value:'all'},
+                                                ]}
+                                            >
+                                            </Select>
+                                        </Form.Item>
+                                    </ConfigProvider>
                                 </Col>
 
                                 <Col xs={24} sm={24} md={24} lg={6} style={{ display: 'flex', alignItems: 'flex-end' }}>
-                                    <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                                    <Form.Item >
                                         <Button
                                             type="primary"
                                             htmlType="submit"
@@ -223,7 +189,7 @@ function App() {
                                         >
                                             重置
                                         </Button>
-                                    </Space>
+                                    </Form.Item>
                                 </Col>
                             </Row>
                         </Form>
@@ -233,19 +199,14 @@ function App() {
                     <Card>
                         <div style={{ marginBottom: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <h3 style={{ margin: 0 }}>个人人效列表</h3>
+                                <h3 style={{ margin: 0 }}>工作点人效</h3>
                             </div>
                         </div>
 
                         <Spin spinning={loading} tip="数据加载中...">
                             <Table
                                 columns={columns}
-                                dataSource={data}
-                                pagination={{
-                                    pageSize: 5,
-                                    showSizeChanger: false,
-                                    showTotal: total => `共 ${total} 条数据`,
-                                }}
+                                dataSource={efficiencyData}
                                 rowKey="key"
                                 locale={{
                                     emptyText: isSearching ? '没有找到匹配的数据' : '暂无数据'
