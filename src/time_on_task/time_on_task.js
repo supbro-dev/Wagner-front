@@ -41,6 +41,27 @@ function initGantt(ganttContainer, isGanttInitialized, operateDay, ganttContaine
         gantt.clearAll()
     }
 
+    // gantt.render();
+
+    // 拦截双击事件并阻止默认弹窗
+    gantt.attachEvent("onTaskDblClick", function (id, e) {
+        return false; // 返回false阻止默认行为
+    });
+
+    // 没起作用
+    gantt.attachEvent("onTaskDrag", function (id, mode, task) {
+        return false; // 禁止任务移动
+    });
+
+    gantt.attachEvent("onLinkCreated", function (id, link) {
+        return false; // 禁止添加连接线
+    });
+
+    // 这里的事件留着以后用 todo
+    gantt.attachEvent("onTaskClick", function(id, e) {
+        console.log("You've just clicked an item with id="+id);
+    });
+
     gantt.setSkin("meadow");
     window.gantt.templates.task_class = function(start, end, task) {
         switch (task.actionType) {

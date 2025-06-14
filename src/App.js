@@ -8,8 +8,8 @@ function App() {
     return (
         <div className="App">
             {/*<EfficiencySummary />*/}
-            {/*<WorkplaceEfficiency />*/}
-            <TimeOnTask />
+            <WorkplaceEfficiency />
+            {/*<TimeOnTask />*/}
         </div>
     );
 }
