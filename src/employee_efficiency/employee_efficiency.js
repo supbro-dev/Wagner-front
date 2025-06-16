@@ -8,7 +8,7 @@ import {
     Input,
     Layout,
     message,
-    Pagination,
+    Pagination, Progress,
     Row,
     Select,
     Space, Spin,
@@ -74,6 +74,16 @@ function App() {
 
 
             setEfficiencyData(data.data.tableDataList)
+            data.data.columns.forEach(column => {
+                if (column.key == 'timeRate') {
+                    column.render = (_, record) => {
+                        return (
+                            <Progress percent={record.directWorkTimeRate + record.indirectWorkTimeRate} strokeColor={'#3b9a3c'} success={{ percent: record.indirectWorkTimeRate , strokeColor: '#d6b221'}} trailColor={'black'} size={[300, 20]} strokeLinecap="butt" showInfo={false}/>
+                        )
+                    }
+                }
+            })
+
             setColumns(data.data.columns)
 
             console.log('后端返回数据:', data);
@@ -113,7 +123,7 @@ function App() {
                             <span>人效管理</span>
                         </Breadcrumb.Item>
                         <Breadcrumb.Item>
-                            <strong>个人人效</strong>
+                            <strong>员工环节人效</strong>
                         </Breadcrumb.Item>
                     </Breadcrumb>
 
@@ -231,7 +241,7 @@ function App() {
                     <Card>
                         <div style={{ marginBottom: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <h3 style={{ margin: 0 }}>个人人效列表</h3>
+                                <h3 style={{ margin: 0 }}>员工环节人效</h3>
                             </div>
                         </div>
 
