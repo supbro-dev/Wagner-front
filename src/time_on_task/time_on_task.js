@@ -207,7 +207,7 @@ function initData(data) {
 }
 
 
-function App() {
+function TimeOnTask() {
     const [employee, setEmployee] = useState({});
     const ganttContainer = useRef(null);
     const ganttContainer2 = useRef(null);
@@ -298,8 +298,8 @@ function App() {
                             size={'middle'}
                             autoComplete="off"
                             initialValues={{
-                                operateDay: dayjs('2025-05-28'),
-                                employeeNumber: 'A1001',
+                                // operateDay: dayjs('2025-05-28'),
+                                // employeeNumber: 'A1001',
                             }}
                         >
                             <Row gutter={24}>
@@ -377,4 +377,4 @@ function App() {
         </div>
     );
 }
-export default App;
+export default TimeOnTask;
