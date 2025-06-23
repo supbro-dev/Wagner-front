@@ -9,7 +9,7 @@ import {BrowserRouter, Route, Routes} from "react-router-dom";
 
 function App() {
     return (
-        <BrowserRouter>
+        <BrowserRouter basename="/web">
             <Routes>
                 <Route path="/employeeEfficiency" element={<EmployeeEfficiency />} />
                 <Route path="/employeeStatus" element={<EmployeeStatus />} />
