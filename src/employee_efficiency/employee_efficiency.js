@@ -29,8 +29,10 @@ dayjs.locale('zh-cn');
 const dateFormat = 'YYYY-MM-DD'
 const customFormat = value => `${value.format(dateFormat)}`;
 
+const showTotal = total => `共 ${total} 条`;
 
-function App() {
+
+function EmployeeEfficiency() {
     const [loading, setLoading] = useState(false);
 
     const [form] = Form.useForm();
@@ -38,6 +40,64 @@ function App() {
     const [workplaces, setWorkplaces] = useState([]);
     const [efficiencyData, setEfficiencyData] = useState([]);
     const [columns, setColumns] = useState([])
+
+
+    const onChange = async (pageNumber, pageSize) => {
+        setLoading(true);
+        try {
+            const {
+                workplaceCode,
+                employeeNumber,
+                dateRange,
+                aggregateDimension,
+                isCrossPosition,
+            } = form.getFieldsValue()
+
+            const response = await fetch(`/api/v1/efficiency/employee?workplaceCode=${workplaceCode}&employeeNumber=${employeeNumber ? employeeNumber : ''}&startDate=${dateRange[0].format(dateFormat)}&endDate=${dateRange[1].format(dateFormat)}&aggregateDimension=${aggregateDimension}&isCrossPosition=${isCrossPosition}&currentPage=${pageNumber}&pageSize=${pageSize}`);
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            setEfficiencyData(data.data.tableDataList)
+            data.data.columns.forEach(column => {
+                if (column.key == 'timeRate') {
+                    column.render = (_, record) => {
+                        if (record.attendanceTime != 0) {
+                            return (
+                                <Progress percent={record.directWorkTimeRate + record.indirectWorkTimeRate} strokeColor={'#3b9a3c'} success={{ percent: record.indirectWorkTimeRate , strokeColor: '#d6b221'}} trailColor={'black'} size={[300, 20]} strokeLinecap="butt" showInfo={false}/>
+                            )
+                        } else {
+                            return ''
+                        }
+                    }
+                }
+            })
+
+            setColumns(data.data.columns)
+            setPage(prev => ({ ...prev, current: data.data.page.currentPage,
+                pageSize: data.data.page.pageSize,
+                total: data.data.page.total, }));
+        } catch (error) {
+            console.error('请求出错:', error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const onShowSizeChange = onChange
+
+
+    const [page, setPage] = useState({
+        current: 1,
+        pageSize: 20,
+        total: 0,
+        showTotal: showTotal,
+        onChange: onChange,
+        showSizeChanger: true,
+        pageSizeOptions: [20, 50, 100],
+        onShowSizeChange: onShowSizeChange,
+    });
 
     const fetchWorkplace = async () => {
         try {
@@ -66,7 +126,7 @@ function App() {
                 isCrossPosition,
             } = values
 
-            const response = await fetch(`/api/v1/efficiency/employee?workplaceCode=${workplaceCode}&employeeNumber=${employeeNumber ? employeeNumber : ''}&startDate=${dateRange[0].format(dateFormat)}&endDate=${dateRange[1].format(dateFormat)}&aggregateDimension=${aggregateDimension}&isCrossPosition=${isCrossPosition}`);
+            const response = await fetch(`/api/v1/efficiency/employee?workplaceCode=${workplaceCode}&employeeNumber=${employeeNumber ? employeeNumber : ''}&startDate=${dateRange[0].format(dateFormat)}&endDate=${dateRange[1].format(dateFormat)}&aggregateDimension=${aggregateDimension}&isCrossPosition=${isCrossPosition}&currentPage=${page.current}&pageSize=${page.pageSize}`);
             if (!response.ok) {
                 throw new Error(`请求失败: ${response.status}`);
             }
@@ -77,16 +137,23 @@ function App() {
             data.data.columns.forEach(column => {
                 if (column.key == 'timeRate') {
                     column.render = (_, record) => {
-                        return (
-                            <Progress percent={record.directWorkTimeRate + record.indirectWorkTimeRate} strokeColor={'#3b9a3c'} success={{ percent: record.indirectWorkTimeRate , strokeColor: '#d6b221'}} trailColor={'black'} size={[300, 20]} strokeLinecap="butt" showInfo={false}/>
-                        )
+                        if (record.attendanceTime != 0) {
+                            return (
+                                <Progress percent={record.directWorkTimeRate + record.indirectWorkTimeRate} strokeColor={'#3b9a3c'} success={{ percent: record.indirectWorkTimeRate , strokeColor: '#d6b221'}} trailColor={'black'} size={[300, 20]} strokeLinecap="butt" showInfo={false}/>
+                            )
+                        } else {
+                            return ''
+                        }
                     }
                 }
             })
 
             setColumns(data.data.columns)
 
-            console.log('后端返回数据:', data);
+            setPage(prev => ({ ...prev, current: data.data.page.currentPage,
+                pageSize: data.data.page.pageSize,
+                total: data.data.page.total, }));
+
         } catch (error) {
             console.error('请求出错:', error);
         } finally {
@@ -186,7 +253,7 @@ function App() {
                                     </ConfigProvider>
                                 </Col>
 
-                                <Col xs={12} sm={6} md={4} lg={2}>
+                                <Col xs={12} sm={6} md={4} lg={4}>
                                     <ConfigProvider locale={locale}>
                                         <Form.Item label="是否跨岗支援" name="isCrossPosition" rules={[{ required: true, message: '是否跨岗支援必选' }]}>
                                             <Select
@@ -246,18 +313,17 @@ function App() {
                         </div>
 
                         <Spin spinning={loading} tip="数据加载中...">
+                            <ConfigProvider locale={locale}>
                             <Table
                                 columns={columns}
                                 dataSource={efficiencyData}
-                                pagination={{
-                                    pageSize: 20,
-                                    showTotal: total => `共 ${total} 条数据`,
-                                }}
+                                pagination={page}
                                 rowKey="key"
                                 locale={{
                                     emptyText: isSearching ? '没有找到匹配的数据' : '暂无数据'
                                 }}
                             />
+                            </ConfigProvider>
                         </Spin>
                     </Card>
                 </Content>
@@ -266,4 +332,4 @@ function App() {
     );
 }
 
-export default App;
+export default EmployeeEfficiency;

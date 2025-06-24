@@ -40,7 +40,7 @@ const expandColumns = [
 
 
 
-function App() {
+function EmployeeStatus() {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [workplaces, setWorkplaces] = useState([]);
@@ -145,8 +145,8 @@ function App() {
                             size={'middle'}
                             autoComplete="off"
                             initialValues={{
-                                operateDay: dayjs('2025-05-28'),
-                                employeeNumber: 'A1001',
+                                // operateDay: dayjs('2025-05-28'),
+                                // employeeNumber: 'A1001',
                             }}
                         >
                             <Row gutter={24}>
@@ -212,4 +212,4 @@ function App() {
 
 
 
-export default App;
+export default EmployeeStatus;

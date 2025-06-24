@@ -30,7 +30,7 @@ const dateFormat = 'YYYY-MM-DD'
 const customFormat = value => `${value.format(dateFormat)}`;
 
 
-function App() {
+function WorkplaceEfficiency () {
     const [loading, setLoading] = useState(false);
 
     const [form] = Form.useForm();
@@ -220,4 +220,4 @@ function App() {
     );
 }
 
-export default App;
+export default WorkplaceEfficiency;
