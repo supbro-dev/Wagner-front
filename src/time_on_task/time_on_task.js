@@ -4,13 +4,13 @@ import {
     Card,
     Col,
     ConfigProvider,
-    DatePicker,
+    DatePicker, Drawer,
     Form,
     Input,
     Layout,
     message,
     Row,
-    Statistic
+    Statistic, Table, Tag
 } from "antd";
 import "dhtmlx-gantt/codebase/dhtmlxgantt.css";
 import {Content} from "antd/es/layout/layout";
@@ -36,7 +36,8 @@ function getMinutes(time1, time2) {
     return (time2 - time1) / (1000 * 60)
 }
 
-function initGantt(ganttContainer, isGanttInitialized, operateDay, ganttContainer2) {
+
+function initGantt(ganttContainer, isGanttInitialized, operateDay, onTaskClickHandler) {
     if (isGanttInitialized) {
         gantt.clearAll()
     }
@@ -58,9 +59,7 @@ function initGantt(ganttContainer, isGanttInitialized, operateDay, ganttContaine
     });
 
     // 这里的事件留着以后用 todo
-    gantt.attachEvent("onTaskClick", function(id, e) {
-        console.log("You've just clicked an item with id="+id);
-    });
+    gantt.attachEvent("onTaskClick", onTaskClickHandler);
 
     gantt.setSkin("meadow");
     window.gantt.templates.task_class = function(start, end, task) {
@@ -189,6 +188,7 @@ function initData(data) {
             var processDuration = data.processDurationList[i];
             ganttData.push(
                 {
+                    id: processDuration.id,
                     processName: processDuration.processName,
                     text: "",
                     actionType: convertActionType(processDuration.actionType),
@@ -206,16 +206,40 @@ function initData(data) {
     return ganttData
 }
 
+function initDetail(data) {
+    const id2Detail = {}
+    if (data.processDurationList && data.processDurationList.length > 0) {
+        for (let i = 0; i < data.processDurationList.length; i++) {
+            var processDuration = data.processDurationList[i];
+            id2Detail[processDuration.id] = processDuration.details
+        }
+    }
+
+    return id2Detail
+}
+
+const columns = [
+    { title: '开始时间', dataIndex: 'startTime', key: 'startTime' },
+    { title: '结束时间', dataIndex: 'endTime', key: 'endTime' },
+    { title: '持续时长(分钟)', dataIndex: 'duration', key: 'duration' },
+    { title: '加工记录', dataIndex: 'operationMessage', key: 'operationMessage' },
+];
+
 
 function TimeOnTask() {
     const [employee, setEmployee] = useState({});
     const ganttContainer = useRef(null);
-    const ganttContainer2 = useRef(null);
     const [isGanttInitialized, setIsGanttInitialized] = useState(false);
 
+    const [detailData, setDetailData] = useState([]);
+    const [openDraw, setOpenDraw] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const [form] = Form.useForm();
+
+    const onCloseDraw = () => {
+        setOpenDraw(false)
+    }
 
     const fetchData =  async (values) => {
         setLoading(true);
@@ -240,10 +264,20 @@ function TimeOnTask() {
                 operateDay: dayjs(new Date(data.data.operateDay)).format(dateFormat),
             })
 
-            // 初始化甘特图
-            initGantt(ganttContainer, isGanttInitialized, data.data.operateDay, ganttContainer2);
             // 初始化数据
-            var ganttData = initData(data.data)
+            const ganttData = initData(data.data)
+            // 初始化明细数据
+            const currentId2Detail = initDetail(data.data)
+
+            // 初始化甘特图
+            initGantt(ganttContainer, isGanttInitialized, data.data.operateDay, function(id, e) {
+                setDetailData([])
+                const details = currentId2Detail[id]
+
+                setOpenDraw(true)
+                setDetailData(details)
+            });
+
 
             // 解析数据
             gantt.parse({
@@ -252,8 +286,6 @@ function TimeOnTask() {
 
             setIsGanttInitialized(true)
 
-
-            console.log('后端返回数据:', data);
         } catch (error) {
             console.error('请求出错:', error);
         } finally {
@@ -374,7 +406,25 @@ function TimeOnTask() {
                     </Card>
                 </Content>
             </Layout>
+            <Drawer
+                title="明细数据"
+                closable={{ 'aria-label': 'Close Button' }}
+                open={openDraw}
+                onClose={onCloseDraw}
+                size={'large'}
+            >
+                <Table
+                    columns={columns}
+                    dataSource={detailData}
+                    rowKey="key"
+                    locale={{
+                        emptyText: '暂无数据',
+                    }}
+                />
+
+            </Drawer>
         </div>
+
     );
 }
 export default TimeOnTask;
