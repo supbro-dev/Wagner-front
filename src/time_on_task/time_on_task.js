@@ -4,7 +4,7 @@ import {
     Card,
     Col,
     ConfigProvider,
-    DatePicker, Drawer,
+    DatePicker, Descriptions, Drawer,
     Form,
     Input,
     Layout,
@@ -58,7 +58,6 @@ function initGantt(ganttContainer, isGanttInitialized, operateDay, onTaskClickHa
         return false; // 禁止添加连接线
     });
 
-    // 这里的事件留着以后用 todo
     gantt.attachEvent("onTaskClick", onTaskClickHandler);
 
     gantt.setSkin("meadow");
@@ -101,7 +100,7 @@ function initGantt(ganttContainer, isGanttInitialized, operateDay, onTaskClickHa
 
     const secondGridColumns = {
         columns: [
-            {name: "workLoadDesc", label: "工作量", min_width: "120", align: "center"},
+            {name: "workLoadDesc", label: "工作量", min_width: "240", align: "center"},
             {name: "duration", label: "持续时间(分钟)", min_width: "120", align: "center"},
         ]
     };
@@ -115,7 +114,7 @@ function initGantt(ganttContainer, isGanttInitialized, operateDay, onTaskClickHa
                     {resizer: true, width: 1},
                     {view: "timeline", scrollX: "scrollHor", scrollY: "scrollVer"},
                     {resizer: true, width: 1},
-                    {view: "grid", width: 240, bind: "task", scrollY: "scrollVer", config: secondGridColumns},
+                    {view: "grid", width: 360, bind: "task", scrollY: "scrollVer", config: secondGridColumns},
                     {view: "scrollbar", id: "scrollVer"}
                 ]
 
@@ -227,9 +226,10 @@ const columns = [
 
 
 function TimeOnTask() {
-    const [employee, setEmployee] = useState({});
+
     const ganttContainer = useRef(null);
     const [isGanttInitialized, setIsGanttInitialized] = useState(false);
+    const [employeeInfos, setEmployeeInfos] = useState([])
 
     const [detailData, setDetailData] = useState([]);
     const [openDraw, setOpenDraw] = useState(false);
@@ -256,13 +256,13 @@ function TimeOnTask() {
             const data = await response.json();
             const workplaceName = data.data.workplaceName
 
-            setEmployee({
-                employeeNumber : data.data.employeeNumber,
-                employeeName : data.data.employeeName,
-                workplaceName :workplaceName,
-                regionCode : data.data.regionCode,
-                operateDay: dayjs(new Date(data.data.operateDay)).format(dateFormat),
-            })
+            setEmployeeInfos([
+                {key:'employeeNumber', label:'员工工号', children:data.data.employeeNumber},
+                {key:'employeeName', label:'员工姓名', children:data.data.employeeName},
+                {key:'workplaceName', label:'所在工作点', children:workplaceName},
+                {key:'regionCode', label:'所在区域', children:data.data.regionCode},
+                {key:'operateDay', label:'工作日期', children:dayjs(new Date(data.data.operateDay)).format(dateFormat)},
+            ])
 
             // 初始化数据
             const ganttData = initData(data.data)
@@ -274,8 +274,10 @@ function TimeOnTask() {
                 setDetailData([])
                 const details = currentId2Detail[id]
 
-                setOpenDraw(true)
-                setDetailData(details)
+                if (details) {
+                    setOpenDraw(true)
+                    setDetailData(details)
+                }
             });
 
 
@@ -380,21 +382,22 @@ function TimeOnTask() {
                     </Card>
                     <Card>
                         <Row gutter={20}>
-                            <Col span={4}>
-                                <Statistic title="员工姓名" value={employee.employeeName} formatter={statisticFormat}/>
-                            </Col>
-                            <Col span={4}>
-                                <Statistic title="员工工号" value={employee.employeeNumber} />
-                            </Col>
-                            <Col span={4}>
-                                <Statistic title="工作点" value={employee.workplaceName} />
-                            </Col>
-                            <Col span={4}>
-                                <Statistic title="区域" value={employee.regionCode} />
-                            </Col>
-                            <Col span={4}>
-                                <Statistic title="作业日期" value={employee.operateDay} />
-                            </Col>
+                            <Descriptions title="员工信息" items={employeeInfos} />
+                            {/*<Col span={4}>*/}
+                            {/*    <Statistic title="员工姓名" value={employee.employeeName} formatter={statisticFormat}/>*/}
+                            {/*</Col>*/}
+                            {/*<Col span={4}>*/}
+                            {/*    <Statistic title="员工工号" value={employee.employeeNumber} />*/}
+                            {/*</Col>*/}
+                            {/*<Col span={4}>*/}
+                            {/*    <Statistic title="工作点" value={employee.workplaceName} />*/}
+                            {/*</Col>*/}
+                            {/*<Col span={4}>*/}
+                            {/*    <Statistic title="区域" value={employee.regionCode} />*/}
+                            {/*</Col>*/}
+                            {/*<Col span={4}>*/}
+                            {/*    <Statistic title="作业日期" value={employee.operateDay} />*/}
+                            {/*</Col>*/}
                         </Row>
                     </Card>
                     {/* 数据表格 */}
