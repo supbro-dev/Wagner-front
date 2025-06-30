@@ -32,10 +32,10 @@ const columns = [
 ];
 
 const expandColumns = [
-    { title: '工号', dataIndex: 'employeeNumber', key: 'employeeNumber' },
-    { title: '姓名', dataIndex: 'employeeName', key: 'employeeName' },
-    { title: '员工状态', dataIndex: 'statusDesc', key: 'statusDesc' },
-    { title: '最近一次行动', dataIndex: 'lastActionDesc', key: 'lastActionDesc' },
+    { title: '工号', dataIndex: 'employeeNumber', key: 'employeeNumber', width:'120'},
+    { title: '姓名', dataIndex: 'employeeName', key: 'employeeName' , width:'120'},
+    { title: '员工状态', dataIndex: 'statusDesc', key: 'statusDesc',  width:'120'},
+    { title: '最近一次行动', dataIndex: 'lastActionDesc', key: 'lastActionDesc',  width:'240' },
 ]
 
 
@@ -83,7 +83,6 @@ function EmployeeStatus() {
             if (data.data.groupStatus) {
                 setDataSource(data.data.groupStatus)
 
-                debugger
                 const theExpandDataSource = {}
                 for (const i in data.data.groupStatus) {
                     let groupStatus = data.data.groupStatus[i]
@@ -199,7 +198,7 @@ function EmployeeStatus() {
                     <Card>
                         <Table
                             columns={columns}
-                            expandable={{ expandedRowRender, defaultExpandedRowKeys: ['0'] }}
+                            expandable={{ expandedRowRender}}
                             dataSource={dataSource}
                             pagination={{ position: ["none"] }}
                         />
