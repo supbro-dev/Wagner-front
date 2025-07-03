@@ -18,7 +18,6 @@ import {Content} from "antd/es/layout/layout";
 import dayjs from "dayjs";
 import locale from "antd/locale/zh_CN";
 import React, {useEffect, useState} from "react";
-import EmployeeEfficiency from "../employee_efficiency/employee_efficiency";
 
 const showTotal = total => `共 ${total} 条`;
 
