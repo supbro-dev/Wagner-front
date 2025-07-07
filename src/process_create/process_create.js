@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
     Breadcrumb, Button,
     Col,
@@ -12,10 +12,11 @@ import {
     Splitter,
     Steps,
     Typography,
-    Radio, Select
+    Radio, Select, message, Tree
 } from 'antd';
-import {Content} from "antd/es/layout/layout";
+import {Content, Footer} from "antd/es/layout/layout";
 import locale from "antd/locale/zh_CN";
+import {useLocation} from "react-router-dom";
 
 const stepItems = [
     {
@@ -39,7 +40,10 @@ const boxStyle = {
 
 
 
+
 function ProcessCreate() {
+    const [processImpl, setProcessImpl] = useState({})
+    const [messageApi, contextHolder] = message.useMessage();
     const [baseInfoShow, setBaseInfoShow] = useState(true);
     const [processManagementShow, setProcessManagementShow] = useState(false);
     const [otherParamsShow, setOtherParamsShow] = useState(false);
@@ -51,7 +55,19 @@ function ProcessCreate() {
     const [showWorkplace, setShowWorkplace] = useState(false)
     const [showIndustry, setShowIndustry] = useState(false)
     const [showSubIndustry, setShowSubIndustry] = useState(false)
+    const [treeData, setTreeData] = useState([])
     const [baseInfoForm] = Form.useForm();
+
+    const location = useLocation();
+    // 使用 URLSearchParams 解析查询字符串
+    const queryParams = new URLSearchParams(location.search);
+    let id = queryParams.get('id');
+
+
+
+    const error = (msg) => {
+        messageApi.error(msg);
+    };
 
     const hideAll = () => {
         setBaseInfoShow(false)
@@ -81,8 +97,55 @@ function ProcessCreate() {
         }
     }
 
-    const submitBaseInfo  =  async (values) => {
+    const initProcessPositionTree = async (id) => {
+        try {
+            const response = await fetch('/api/v1/process/getProcessPositionTree?id=' + id);
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
 
+            setTreeData([data.data])
+        } catch (error) {
+            console.error('获取环节组织架构树失败:', error);
+        }
+    }
+
+    const submitBaseInfo  =  () => {
+        baseInfoForm.validateFields()
+            .then(values => {
+                const postData = {
+                    ...values,
+                }
+
+                if (id) {
+                    postData.id = id
+                }
+                fetch('/api/v1/process/save', {
+                    method: 'POST', // 指定请求方法为POST
+                    headers: {
+                        'Content-Type': 'application/json', // 设置内容类型为JSON
+                    },
+                    body: JSON.stringify(postData),
+                })
+                    .then(response => response.json()) // 将响应解析为JSON
+                    .then(data => {
+                        if (data.code != 0) {
+                            error(data.msg)
+                        } else {
+                            id = data.data
+                            onChangeStep(1)
+                            initProcessPositionTree(id)
+                        }
+                    })
+                    .catch((error) => {
+                        error(error)
+                        console.error('Error:', error);
+                    });
+            })
+            .catch(errorInfo => {
+                console.log('验证失败:', errorInfo);
+            });
     }
 
     const changeTargetType = (targetType) => {
@@ -109,6 +172,87 @@ function ProcessCreate() {
         }
     }
 
+    const fetchWorkplace = async () => {
+        try {
+            const response = await fetch('/api/v1/workplace/all');
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            setWorkplaces(data.data)
+        } catch (error) {
+            console.error('获取工作点失败:', error);
+        }
+    }
+
+    const fetchIndustry = async () => {
+        try {
+            const response = await fetch('/api/v1/workplace/allIndustry');
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            setIndustries(data.data)
+        } catch (error) {
+            console.error('获取行业失败:', error);
+        }
+    }
+
+    const fetchSubIndustry = async () => {
+        try {
+            const response = await fetch('/api/v1/workplace/allSubIndustry');
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            setSubIndustries(data.data)
+        } catch (error) {
+            console.error('获取子行业失败:', error);
+        }
+    }
+
+    const getProcessImpl = async (id) => {
+        try {
+            const response = await fetch('/api/v1/process/getImplementationById?id=' + id);
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            setProcessImpl(data.data)
+            changeTargetType(data.data.targetType)
+            baseInfoForm.setFieldsValue(data.data)
+        } catch (error) {
+            console.error('获取工作点失败:', error);
+        }
+    }
+
+
+    const next = () => {
+        const current = currentStep
+        if (current == 0){
+            submitBaseInfo()
+        }
+    }
+
+    const prev = () => {
+
+    }
+
+    const onSelectTreeNode = () => {
+
+    }
+
+    // 初始化数据
+    useEffect(() => {
+        getProcessImpl(id)
+        fetchWorkplace();
+        fetchIndustry()
+        fetchSubIndustry()
+    }, []);
 
 
     return (
@@ -141,10 +285,6 @@ function ProcessCreate() {
                                 size='middle'
                                 style={{ maxWidth: 600 }}
                                 autoComplete="off"
-                                initialValues={{
-                                    // operateDay: dayjs('2025-05-28'),
-                                    // employeeNumber: 'A1001',
-                                }}
                             >
                                 <ConfigProvider locale={locale}>
                                 <Form.Item label="实施名称" name="name" rules={[{ required: true, message: '实施名称必填' }]}>
@@ -203,16 +343,17 @@ function ProcessCreate() {
                                         />
                                     </Form.Item>
                                 </ConfigProvider>
-                                <Form.Item>
-                                    <Button type="primary">Submit</Button>
-                                </Form.Item>
                             </Form>
                         </Flex>
                     </div>
                     <div hidden={!processManagementShow}>
                         <Splitter style={{height: 200, boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)'}}>
-                            <Splitter.Panel defaultSize="40%" min="20%" max="70%">
-
+                            <Splitter.Panel defaultSize="25%" min="20%" max="70%">
+                                <Tree
+                                    defaultExpandAll={true}
+                                    onSelect={onSelectTreeNode}
+                                    treeData={treeData}
+                                />
                             </Splitter.Panel>
                             <Splitter.Panel>
 
@@ -226,6 +367,16 @@ function ProcessCreate() {
                         finishShow
                     </div>
                 </Content>
+
+                <Footer>
+                    <ConfigProvider locale={locale}>
+                        {contextHolder}
+                        <Flex style={boxStyle} justify={'flex-end'} align={'center'}>
+                            <Button type="default" onClick={prev}>上一步</Button>
+                            <Button type="primary" onClick={next}>下一步</Button>
+                        </Flex>
+                    </ConfigProvider>
+                </Footer>
             </Layout>
         </>
     )

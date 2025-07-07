@@ -172,7 +172,7 @@ function EmployeeEfficiency() {
     // 初始化工作点下拉选
     // 在组件挂载时获取工作点数据
     useEffect(() => {
-        fetchWorkplace();
+        fetchWorkplace()
     }, []);
 
 
