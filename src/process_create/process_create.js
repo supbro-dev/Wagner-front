@@ -12,7 +12,7 @@ import {
     Splitter,
     Steps,
     Typography,
-    Radio, Select, message, Tree, Table
+    Radio, Select, message, Tree, Table, Space, Modal
 } from 'antd';
 import {Content, Footer} from "antd/es/layout/layout";
 import locale from "antd/locale/zh_CN";
@@ -27,6 +27,14 @@ const processTableColumns = [
     { title: '作业最小空闲时间(分钟)', dataIndex: 'minIdleTimeInMinute', key: 'minIdleTimeInMinute' },
     { title: '匹配脚本', dataIndex: 'script', key: 'script' },
     { title: '是否向上汇总', dataIndex: 'workLoadRollUpDesc', key: 'workLoadRollUpDesc' },
+    { title: '操作', dataIndex: 'operation', key: 'operation', render: (record) => {
+            return (
+                <Space>
+                    <Typography.Link>编辑</Typography.Link>
+                    <Typography.Link>删除</Typography.Link>
+                </Space>
+            )
+        },},
 ]
 
 const stepItems = [
@@ -50,10 +58,12 @@ const boxStyle = {
 };
 
 
-
-
 function ProcessCreate() {
+    const [baseInfoForm] = Form.useForm();
+    const [levelForm] = Form.useForm()
+
     const [processImpl, setProcessImpl] = useState({})
+
     const [messageApi, contextHolder] = message.useMessage();
     const [baseInfoShow, setBaseInfoShow] = useState(true);
     const [processManagementShow, setProcessManagementShow] = useState(false);
@@ -67,9 +77,10 @@ function ProcessCreate() {
     const [showIndustry, setShowIndustry] = useState(false)
     const [showSubIndustry, setShowSubIndustry] = useState(false)
     const [treeData, setTreeData] = useState([])
-    const [baseInfoForm] = Form.useForm();
+
     const [processTableData, setProcessTableData] = useState([])
     const [isSearching, setIsSearching] = useState(false)
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
     const location = useLocation();
     // 使用 URLSearchParams 解析查询字符串
@@ -256,8 +267,15 @@ function ProcessCreate() {
 
     }
 
-    const onSelectTreeNode = async (selectedKeys) => {
+    const createProcess = () => {
 
+    }
+
+    const importProcess = () => {
+
+    }
+
+    const onSelectTreeNode = async (selectedKeys, e) => {
         try {
             const response = await fetch(`/api/v1/process/findProcessByParentProcessCode?processCode=${selectedKeys}&processImplId=${id}`);
             if (!response.ok) {
@@ -270,6 +288,82 @@ function ProcessCreate() {
             console.error('查询环节列表失败:', error);
         }
     }
+
+    const submitLevel = async () => {
+        levelForm.validateFields()
+            .then(values => {
+                const postData = {
+                    ...values,
+                    processImplId:id,
+                }
+
+                fetch('/api/v1/process/addProcessPosition', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json', // 设置内容类型为JSON
+                    },
+                    body: JSON.stringify(postData),
+                })
+                    .then(response => response.json()) // 将响应解析为JSON
+                    .then(data => {
+                        if (data.code != 0) {
+                            error(data.msg)
+                        } else {
+                            initProcessPositionTree(id)
+                        }
+                    })
+                    .catch((err) => {
+                        error(err)
+                        console.error('Error:', err);
+                    });
+            })
+            .catch(errorInfo => {
+                console.log('验证失败:', errorInfo);
+            });
+    }
+
+    const addNextLevel = (code, name) => {
+        setIsCreateModalOpen(true)
+        const levelFormData = {
+            parentProcessName:name,
+            parentProcessCode:code,
+            addLevelType:'nextLevel',
+        }
+        levelForm.setFieldsValue(levelFormData)
+    }
+
+    const onGenerateCode = async () => {
+        const name = levelForm.getFieldValue("processName")
+        try {
+            const response = await fetch(`/api/v1/process/generateProcessCode?processName=${name}&processImplId=${id}`);
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            levelForm.setFieldValue("processCode", data.data)
+        } catch (error) {
+            console.error('生成环节编码失败:', error);
+        }
+    }
+
+    const renderTreeNode = (value) => {
+        const showAddSameLevel = value.type !== 'ROOT'
+        const showAddNextLevel = value.type !== 'POSITION'
+        const showDelete = value.type !== 'ROOT'
+
+        return (
+            <div >
+                <Space>
+                    <span>{value.title}</span>
+                    <Typography.Link hidden={!showAddNextLevel} onClick={() => {addNextLevel(value.key, value.title)}}>添加下级</Typography.Link>
+                    <Typography.Link hidden={!showAddSameLevel}>添加同级</Typography.Link>
+                    <Typography.Link >编辑</Typography.Link>
+                    <Typography.Link hidden={!showDelete}>删除</Typography.Link>
+                </Space>
+            </div>
+        )
+    };
 
     // 初始化数据
     useEffect(() => {
@@ -378,9 +472,14 @@ function ProcessCreate() {
                                     defaultExpandAll={true}
                                     onSelect={onSelectTreeNode}
                                     treeData={treeData}
+                                    titleRender={renderTreeNode}
                                 />
                             </Splitter.Panel>
                             <Splitter.Panel>
+                                <Flex justify={'flex-end'} align={'center'}>
+                                    <Button type="primary" onClick={createProcess}>新增环节</Button>
+                                    <Button type="primary" onClick={importProcess}>导入</Button>
+                                </Flex>
                                 <ConfigProvider locale={locale}>
                                     <Table
                                         columns={processTableColumns}
@@ -412,6 +511,96 @@ function ProcessCreate() {
                     </ConfigProvider>
                 </Footer>
             </Layout>
+
+            <Modal
+                title="新增组织层级"
+                closable={{ 'aria-label': 'Custom Close Button' }}
+                open={isCreateModalOpen}
+                footer={null}
+            >
+                <Form
+                    form={levelForm}
+                    layout="horizontal"
+                    onFinish={submitLevel}
+                    size='middle'
+                    autoComplete="off"
+                >
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="当前层级名称" name="parentProcessName" >
+                            <Input
+                                disabled={true}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="当前层级编码" name="parentProcessCode" hidden={true}>
+                            <Input
+                                disabled={true}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="添加位置" name="addLevelType" >
+                            <Select
+                                disabled={true}
+                                options={[
+                                    {label:'同级', value:'sameLevel'},
+                                    {label:'下级', value:'nextLevel'},
+                                ]}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="层级名称" name="processName" rules={[{ required: true, message: '层级名称必填' }]}>
+                            <Input
+                                placeholder="请输入唯一的层级名称"
+                                allowClear
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="层级编码" name="processCode" rules={[{ required: true, message: '层级编码必填' }]}>
+                            <Input
+                                placeholder="请输入唯一的层级编码"
+                                allowClear
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="类型" name="type" rules={[{ required: true, message: '类型必选' }]}>
+                            <Select
+                                allowClear
+                                options={[
+                                    {label:'部门', value:'dept'},
+                                    {label:'岗位', value:'position'},
+                                ]}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="是否向上汇总" name="workLoadRollUp" >
+                            <Radio.Group
+                                options={[
+                                    {label:'是', value:'true'},
+                                    {label:'否', value:'false'},
+                                ]}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                    <Form.Item label={null}>
+                        <Flex justify={'flex-end'} align={'center'}>
+                            <Button htmlType="button" onClick={onGenerateCode}>
+                                自动生成编码
+                            </Button>
+                            <Button type="primary" htmlType="submit" >
+                                提交
+                            </Button>
+                        </Flex>
+                    </Form.Item>
+                    </ConfigProvider>
+                </Form>
+            </Modal>
         </>
     )
 }
