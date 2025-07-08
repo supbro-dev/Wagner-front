@@ -12,11 +12,22 @@ import {
     Splitter,
     Steps,
     Typography,
-    Radio, Select, message, Tree
+    Radio, Select, message, Tree, Table
 } from 'antd';
 import {Content, Footer} from "antd/es/layout/layout";
 import locale from "antd/locale/zh_CN";
 import {useLocation} from "react-router-dom";
+
+const processTableColumns = [
+    {title:"id", dataIndex: "id", key: "id", hidden:true},
+    { title: '环节名称', dataIndex: 'processName', key: 'processName' },
+    { title: '环节编码', dataIndex: 'processCode', key: 'processCode' },
+    { title: '环节类型', dataIndex: 'typeDesc', key: 'typeDesc' },
+    { title: '作业最长时间(分钟)', dataIndex: 'maxTimeInMinute', key: 'maxTimeInMinute' },
+    { title: '作业最小空闲时间(分钟)', dataIndex: 'minIdleTimeInMinute', key: 'minIdleTimeInMinute' },
+    { title: '匹配脚本', dataIndex: 'script', key: 'script' },
+    { title: '是否向上汇总', dataIndex: 'workLoadRollUpDesc', key: 'workLoadRollUpDesc' },
+]
 
 const stepItems = [
     {
@@ -57,6 +68,8 @@ function ProcessCreate() {
     const [showSubIndustry, setShowSubIndustry] = useState(false)
     const [treeData, setTreeData] = useState([])
     const [baseInfoForm] = Form.useForm();
+    const [processTableData, setProcessTableData] = useState([])
+    const [isSearching, setIsSearching] = useState(false)
 
     const location = useLocation();
     // 使用 URLSearchParams 解析查询字符串
@@ -106,6 +119,7 @@ function ProcessCreate() {
             const data = await response.json();
 
             setTreeData([data.data])
+
         } catch (error) {
             console.error('获取环节组织架构树失败:', error);
         }
@@ -226,7 +240,7 @@ function ProcessCreate() {
             changeTargetType(data.data.targetType)
             baseInfoForm.setFieldsValue(data.data)
         } catch (error) {
-            console.error('获取工作点失败:', error);
+            console.error('获取环节实施失败:', error);
         }
     }
 
@@ -242,8 +256,19 @@ function ProcessCreate() {
 
     }
 
-    const onSelectTreeNode = () => {
+    const onSelectTreeNode = async (selectedKeys) => {
 
+        try {
+            const response = await fetch(`/api/v1/process/findProcessByParentProcessCode?processCode=${selectedKeys}&processImplId=${id}`);
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            setProcessTableData(data.data)
+        } catch (error) {
+            console.error('查询环节列表失败:', error);
+        }
     }
 
     // 初始化数据
@@ -347,7 +372,7 @@ function ProcessCreate() {
                         </Flex>
                     </div>
                     <div hidden={!processManagementShow}>
-                        <Splitter style={{height: 200, boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)'}}>
+                        <Splitter style={{boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)'}}>
                             <Splitter.Panel defaultSize="25%" min="20%" max="70%">
                                 <Tree
                                     defaultExpandAll={true}
@@ -356,7 +381,16 @@ function ProcessCreate() {
                                 />
                             </Splitter.Panel>
                             <Splitter.Panel>
-
+                                <ConfigProvider locale={locale}>
+                                    <Table
+                                        columns={processTableColumns}
+                                        dataSource={processTableData}
+                                        rowKey="key"
+                                        locale={{
+                                            emptyText: isSearching ? '没有找到匹配的数据' : '暂无数据'
+                                        }}
+                                    />
+                                </ConfigProvider>
                             </Splitter.Panel>
                         </Splitter>
                     </div>
