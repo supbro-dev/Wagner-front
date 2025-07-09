@@ -81,6 +81,7 @@ function ProcessCreate() {
     const [processTableData, setProcessTableData] = useState([])
     const [isSearching, setIsSearching] = useState(false)
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+    const [editCode, setEditCode] = useState(true)
 
     const location = useLocation();
     // 使用 URLSearchParams 解析查询字符串
@@ -292,12 +293,12 @@ function ProcessCreate() {
     const submitLevel = async () => {
         levelForm.validateFields()
             .then(values => {
-                const postData = {
-                    ...values,
-                    processImplId:id,
+                const postData = values
+                if (id) {
+                    postData.processImplId = parseInt(id)
                 }
 
-                fetch('/api/v1/process/addProcessPosition', {
+                fetch('/api/v1/process/saveProcessPosition', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json', // 设置内容类型为JSON
@@ -309,6 +310,9 @@ function ProcessCreate() {
                         if (data.code != 0) {
                             error(data.msg)
                         } else {
+                            // 清空表单
+                            levelForm.setFieldsValue({})
+                            setIsCreateModalOpen(false)
                             initProcessPositionTree(id)
                         }
                     })
@@ -322,12 +326,29 @@ function ProcessCreate() {
             });
     }
 
-    const addNextLevel = (code, name) => {
+    const operateAddLevel = (parent, addLevelType) => {
         setIsCreateModalOpen(true)
         const levelFormData = {
-            parentProcessName:name,
-            parentProcessCode:code,
-            addLevelType:'nextLevel',
+            parentProcessName:parent.title,
+            parentProcessCode:parent.key,
+            addLevelType:addLevelType,
+        }
+        if (id) {
+            levelFormData.id = id
+        }
+        levelForm.setFieldsValue(levelFormData)
+    }
+
+    const operateEditLevel = (self, addLevelType) => {
+        setIsCreateModalOpen(true)
+        setEditCode(false)
+        const levelFormData = {
+            ...self,
+            addLevelType:addLevelType,
+            processName:self.title,
+            processCode:self.key,
+            parentProcessName:self.parentName,
+            parentProcessCode:self.parentCode,
         }
         levelForm.setFieldsValue(levelFormData)
     }
@@ -351,14 +372,15 @@ function ProcessCreate() {
         const showAddSameLevel = value.type !== 'ROOT'
         const showAddNextLevel = value.type !== 'POSITION'
         const showDelete = value.type !== 'ROOT'
+        const showEdit = value.type !== 'ROOT'
 
         return (
             <div >
                 <Space>
                     <span>{value.title}</span>
-                    <Typography.Link hidden={!showAddNextLevel} onClick={() => {addNextLevel(value.key, value.title)}}>添加下级</Typography.Link>
-                    <Typography.Link hidden={!showAddSameLevel}>添加同级</Typography.Link>
-                    <Typography.Link >编辑</Typography.Link>
+                    <Typography.Link hidden={!showAddNextLevel} onClick={() => {operateAddLevel(value, 'nextLevel')}}>添加下级</Typography.Link>
+                    <Typography.Link hidden={!showAddSameLevel} onClick={() => {operateAddLevel(value, 'sameLevel')}}>添加同级</Typography.Link>
+                    <Typography.Link hidden={!showEdit} onClick={() => {operateEditLevel(value, 'nextLevel')}}>编辑</Typography.Link>
                     <Typography.Link hidden={!showDelete}>删除</Typography.Link>
                 </Space>
             </div>
@@ -504,7 +526,7 @@ function ProcessCreate() {
                 <Footer>
                     <ConfigProvider locale={locale}>
                         {contextHolder}
-                        <Flex style={boxStyle} justify={'flex-end'} align={'center'}>
+                        <Flex style={boxStyle} justify={'flex-end'} align={'center'} gap={'small'}>
                             <Button type="default" onClick={prev}>上一步</Button>
                             <Button type="primary" onClick={next}>下一步</Button>
                         </Flex>
@@ -525,6 +547,11 @@ function ProcessCreate() {
                     size='middle'
                     autoComplete="off"
                 >
+                    <Form.Item label="id" name="id" hidden={true}>
+                        <Input
+                            disabled={true}
+                        />
+                    </Form.Item>
                     <ConfigProvider locale={locale}>
                         <Form.Item label="当前层级名称" name="parentProcessName" >
                             <Input
@@ -561,6 +588,7 @@ function ProcessCreate() {
                     <ConfigProvider locale={locale}>
                         <Form.Item label="层级编码" name="processCode" rules={[{ required: true, message: '层级编码必填' }]}>
                             <Input
+                                disabled={!editCode}
                                 placeholder="请输入唯一的层级编码"
                                 allowClear
                             />
@@ -569,10 +597,31 @@ function ProcessCreate() {
                     <ConfigProvider locale={locale}>
                         <Form.Item label="类型" name="type" rules={[{ required: true, message: '类型必选' }]}>
                             <Select
+                                disabled={!editCode}
                                 allowClear
                                 options={[
                                     {label:'部门', value:'dept'},
                                     {label:'岗位', value:'position'},
+                                ]}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="排序" name="sortIndex" rules={[{ required: true, message: '排序必选' }]}>
+                            <Select
+                                placeholder="请选择顺序"
+                                allowClear
+                                options={[
+                                    {label:'1', value:1},
+                                    {label:'2', value:2},
+                                    {label:'3', value:3},
+                                    {label:'4', value:4},
+                                    {label:'5', value:5},
+                                    {label:'6', value:6},
+                                    {label:'7', value:7},
+                                    {label:'8', value:8},
+                                    {label:'9', value:9},
+                                    {label:'10', value:10},
                                 ]}
                             />
                         </Form.Item>
@@ -589,12 +638,18 @@ function ProcessCreate() {
                     </ConfigProvider>
                     <ConfigProvider locale={locale}>
                     <Form.Item label={null}>
-                        <Flex justify={'flex-end'} align={'center'}>
+                        <Flex justify={'flex-end'} align={'center'} gap={'small'}>
                             <Button htmlType="button" onClick={onGenerateCode}>
                                 自动生成编码
                             </Button>
                             <Button type="primary" htmlType="submit" >
                                 提交
+                            </Button>
+                            <Button htmlType="button" onClick={() => {
+                                levelForm.setFieldsValue({})
+                                setIsCreateModalOpen(false)
+                            }}>
+                                取消
                             </Button>
                         </Flex>
                     </Form.Item>
