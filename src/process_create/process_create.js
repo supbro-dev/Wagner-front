@@ -12,30 +12,12 @@ import {
     Splitter,
     Steps,
     Typography,
-    Radio, Select, message, Tree, Table, Space, Modal
+    Radio, Select, message, Tree, Table, Space, Modal, Popconfirm, Divider
 } from 'antd';
 import {Content, Footer} from "antd/es/layout/layout";
 import locale from "antd/locale/zh_CN";
 import {useLocation} from "react-router-dom";
 
-const processTableColumns = [
-    {title:"id", dataIndex: "id", key: "id", hidden:true},
-    { title: '环节名称', dataIndex: 'processName', key: 'processName' },
-    { title: '环节编码', dataIndex: 'processCode', key: 'processCode' },
-    { title: '环节类型', dataIndex: 'typeDesc', key: 'typeDesc' },
-    { title: '作业最长时间(分钟)', dataIndex: 'maxTimeInMinute', key: 'maxTimeInMinute' },
-    { title: '作业最小空闲时间(分钟)', dataIndex: 'minIdleTimeInMinute', key: 'minIdleTimeInMinute' },
-    { title: '匹配脚本', dataIndex: 'script', key: 'script' },
-    { title: '是否向上汇总', dataIndex: 'workLoadRollUpDesc', key: 'workLoadRollUpDesc' },
-    { title: '操作', dataIndex: 'operation', key: 'operation', render: (record) => {
-            return (
-                <Space>
-                    <Typography.Link>编辑</Typography.Link>
-                    <Typography.Link>删除</Typography.Link>
-                </Space>
-            )
-        },},
-]
 
 const stepItems = [
     {
@@ -60,7 +42,8 @@ const boxStyle = {
 
 function ProcessCreate() {
     const [baseInfoForm] = Form.useForm();
-    const [levelForm] = Form.useForm()
+    const [positionForm] = Form.useForm()
+    const [processForm] = Form.useForm()
 
     const [processImpl, setProcessImpl] = useState({})
 
@@ -73,15 +56,21 @@ function ProcessCreate() {
     const [workplaces, setWorkplaces] = useState([])
     const [industries, setIndustries] = useState([])
     const [subIndustries, setSubIndustries] = useState([])
+    const [positions, setPositions] = useState([])
     const [showWorkplace, setShowWorkplace] = useState(false)
     const [showIndustry, setShowIndustry] = useState(false)
     const [showSubIndustry, setShowSubIndustry] = useState(false)
     const [treeData, setTreeData] = useState([])
 
+    const [selectTreeNodeKey, setSelectTreeNodeKey] = useState(null)
     const [processTableData, setProcessTableData] = useState([])
     const [isSearching, setIsSearching] = useState(false)
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-    const [editCode, setEditCode] = useState(true)
+    const [isPositionModalOpen, setIsPositionModalOpen] = useState(false)
+    const [isCreatePosition, setIsCreatePosition] = useState(true)
+    const [showPosition, setShowPosition] = useState(false)
+
+    const [isCreateProcess, setIsCreateProcess] = useState(false)
+    const [isProcessModelOpen, setIsProcessModelOpen] = useState(false)
 
     const location = useLocation();
     // 使用 URLSearchParams 解析查询字符串
@@ -240,6 +229,20 @@ function ProcessCreate() {
         }
     }
 
+    const fetchPosition = async () => {
+        try {
+            const response = await fetch('/api/v1/position/findAll');
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+
+            setPositions(data.data)
+        } catch (error) {
+            console.error('获取岗位失败:', error);
+        }
+    }
+
     const getProcessImpl = async (id) => {
         try {
             const response = await fetch('/api/v1/process/getImplementationById?id=' + id);
@@ -268,8 +271,14 @@ function ProcessCreate() {
 
     }
 
-    const createProcess = () => {
-
+    const createProcess = (value) => {
+        processForm.resetFields()
+        processForm.setFieldsValue({
+            parentPositionName:value.title,
+            parentPositionCode:value.key,
+        })
+        setIsCreateProcess(true)
+        setIsProcessModelOpen(true)
     }
 
     const importProcess = () => {
@@ -277,6 +286,11 @@ function ProcessCreate() {
     }
 
     const onSelectTreeNode = async (selectedKeys, e) => {
+        if (selectedKeys && selectedKeys.length > 0) {
+            setSelectTreeNodeKey(selectedKeys)
+        } else {
+            selectedKeys = selectTreeNodeKey
+        }
         try {
             const response = await fetch(`/api/v1/process/findProcessByParentProcessCode?processCode=${selectedKeys}&processImplId=${id}`);
             if (!response.ok) {
@@ -290,12 +304,21 @@ function ProcessCreate() {
         }
     }
 
-    const submitLevel = async () => {
-        levelForm.validateFields()
+    const submitPosition = async () => {
+        positionForm.validateFields()
             .then(values => {
                 const postData = values
                 if (id) {
                     postData.processImplId = parseInt(id)
+                }
+
+                // 手动设置岗位名称到form
+                if (values.type === 'POSITION') {
+                    for (const i in positions) {
+                        if (positions[i].value === postData.code) {
+                            postData.name = positions[i].label
+                        }
+                    }
                 }
 
                 fetch('/api/v1/process/saveProcessPosition', {
@@ -311,8 +334,8 @@ function ProcessCreate() {
                             error(data.msg)
                         } else {
                             // 清空表单
-                            levelForm.setFieldsValue({})
-                            setIsCreateModalOpen(false)
+                            positionForm.resetFields()
+                            setIsPositionModalOpen(false)
                             initProcessPositionTree(id)
                         }
                     })
@@ -327,34 +350,65 @@ function ProcessCreate() {
     }
 
     const operateAddLevel = (parent, addLevelType) => {
-        setIsCreateModalOpen(true)
+        positionForm.resetFields()
+        setIsPositionModalOpen(true)
+        setIsCreatePosition(true)
         const levelFormData = {
-            parentProcessName:parent.title,
-            parentProcessCode:parent.key,
+            parentPositionName:parent.title,
+            parentPositionCode:parent.key,
             addLevelType:addLevelType,
+            type:'DEPT',
         }
-        if (id) {
-            levelFormData.id = id
-        }
-        levelForm.setFieldsValue(levelFormData)
+        positionForm.setFieldsValue(levelFormData)
     }
 
     const operateEditLevel = (self, addLevelType) => {
-        setIsCreateModalOpen(true)
-        setEditCode(false)
+        positionForm.resetFields()
+        setIsPositionModalOpen(true)
+        setIsCreatePosition(false)
+        if (self.type === 'POSITION') {
+            setShowPosition(true)
+        } else {
+            setShowPosition(false)
+        }
         const levelFormData = {
             ...self,
             addLevelType:addLevelType,
             processName:self.title,
             processCode:self.key,
-            parentProcessName:self.parentName,
-            parentProcessCode:self.parentCode,
+            parentPositionName:self.parentName,
+            parentPositionCode:self.parentCode,
         }
-        levelForm.setFieldsValue(levelFormData)
+        positionForm.setFieldsValue(levelFormData)
     }
 
-    const onGenerateCode = async () => {
-        const name = levelForm.getFieldValue("processName")
+    const deletePosition = async (values) => {
+        fetch('/api/v1/process/deleteProcessPosition', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json', // 设置内容类型为JSON
+            },
+            body: JSON.stringify({
+                id: values.id,
+            }),
+        })
+            .then(response => response.json()) // 将响应解析为JSON
+            .then(data => {
+                if (data.code != 0) {
+                    error(data.msg)
+                } else {
+                    initProcessPositionTree(id)
+                    onSelectTreeNode([])
+                }
+            })
+            .catch((err) => {
+                error(err)
+                console.error('Error:', err);
+            });
+    }
+
+    const onGenerateCode = async (form, propName, propCode) => {
+        const name = form.getFieldValue(propName)
         try {
             const response = await fetch(`/api/v1/process/generateProcessCode?processName=${name}&processImplId=${id}`);
             if (!response.ok) {
@@ -362,7 +416,7 @@ function ProcessCreate() {
             }
             const data = await response.json();
 
-            levelForm.setFieldValue("processCode", data.data)
+            form.setFieldValue(propCode, data.data)
         } catch (error) {
             console.error('生成环节编码失败:', error);
         }
@@ -373,6 +427,7 @@ function ProcessCreate() {
         const showAddNextLevel = value.type !== 'POSITION'
         const showDelete = value.type !== 'ROOT'
         const showEdit = value.type !== 'ROOT'
+        const showCreateProcess = value.type === 'POSITION'
 
         return (
             <div >
@@ -381,11 +436,94 @@ function ProcessCreate() {
                     <Typography.Link hidden={!showAddNextLevel} onClick={() => {operateAddLevel(value, 'nextLevel')}}>添加下级</Typography.Link>
                     <Typography.Link hidden={!showAddSameLevel} onClick={() => {operateAddLevel(value, 'sameLevel')}}>添加同级</Typography.Link>
                     <Typography.Link hidden={!showEdit} onClick={() => {operateEditLevel(value, 'nextLevel')}}>编辑</Typography.Link>
-                    <Typography.Link hidden={!showDelete}>删除</Typography.Link>
+                    <Typography.Link hidden={!showCreateProcess} onClick={() => {createProcess(value)}}>新增环节</Typography.Link>
+                    <Popconfirm
+                        title="请确认"
+                        description={value.type === 'POSITION' ? "确认删除此岗位吗?" : "确认删除该部门吗?"}
+                        onConfirm={() =>{deletePosition(value)}}
+                        okText="确定"
+                        cancelText="取消"
+                    >
+                        <Typography.Link hidden={!showDelete} >删除</Typography.Link>
+                    </Popconfirm>
+
                 </Space>
             </div>
         )
     };
+
+    const submitProcess = async (values) => {
+        processForm.validateFields()
+            .then(values => {
+                const postData = values
+                if (id) {
+                    postData.processImplId = parseInt(id)
+                }
+
+                fetch('/api/v1/process/saveProcess', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json', // 设置内容类型为JSON
+                    },
+                    body: JSON.stringify(postData),
+                })
+                    .then(response => response.json()) // 将响应解析为JSON
+                    .then(data => {
+                        if (data.code != 0) {
+                            error(data.msg)
+                        } else {
+                            // 清空表单
+                            processForm.resetFields()
+                            setIsProcessModelOpen(false)
+                            onSelectTreeNode(selectTreeNodeKey)
+                        }
+                    })
+                    .catch((err) => {
+                        error(err)
+                        console.error('Error:', err);
+                    });
+            })
+            .catch(errorInfo => {
+                console.log('验证失败:', errorInfo);
+            });
+
+    }
+
+    const editProcess = (values) => {
+        processForm.setFieldsValue({
+            ...values,
+            parentPositionCode: values.parentCode,
+        })
+        setIsCreateProcess(false)
+        setIsProcessModelOpen(true)
+    }
+
+    const processTableColumns = [
+        {title:"id", dataIndex: "id", key: "id", hidden:true},
+        { title: '环节名称', dataIndex: 'name', key: 'name' },
+        { title: '环节编码', dataIndex: 'code', key: 'code' },
+        { title: '环节类型', dataIndex: 'typeDesc', key: 'typeDesc' },
+        { title: '匹配脚本', dataIndex: 'script', key: 'script' },
+        { title: '作业最长时间(分钟)', dataIndex: 'maxTimeInMinuteDesc', key: 'maxTimeInMinuteDesc' },
+        { title: '作业最小空闲时间(分钟)', dataIndex: 'minIdleTimeInMinuteDesc', key: 'minIdleTimeInMinuteDesc' },
+        { title: '是否向上汇总', dataIndex: 'workLoadRollUpDesc', key: 'workLoadRollUpDesc' },
+        { title: '操作', dataIndex: 'operation', key: 'operation', render: (value,record) => {
+                return (
+                    <Space>
+                        <Typography.Link onClick={() => {editProcess(record)}}>编辑</Typography.Link>
+                        <Popconfirm
+                            title="请确认"
+                            description={"确定删除该环节吗？"}
+                            onConfirm={() =>{deletePosition(record)}}
+                            okText="确定"
+                            cancelText="取消"
+                        >
+                            <Typography.Link>删除</Typography.Link>
+                        </Popconfirm>
+                    </Space>
+                )
+            },},
+    ]
 
     // 初始化数据
     useEffect(() => {
@@ -393,6 +531,7 @@ function ProcessCreate() {
         fetchWorkplace();
         fetchIndustry()
         fetchSubIndustry()
+        fetchPosition()
     }, []);
 
 
@@ -499,7 +638,6 @@ function ProcessCreate() {
                             </Splitter.Panel>
                             <Splitter.Panel>
                                 <Flex justify={'flex-end'} align={'center'}>
-                                    <Button type="primary" onClick={createProcess}>新增环节</Button>
                                     <Button type="primary" onClick={importProcess}>导入</Button>
                                 </Flex>
                                 <ConfigProvider locale={locale}>
@@ -535,15 +673,15 @@ function ProcessCreate() {
             </Layout>
 
             <Modal
-                title="新增组织层级"
+                title={isCreatePosition ? "新增组织层级" : "编辑组织层级"}
                 closable={{ 'aria-label': 'Custom Close Button' }}
-                open={isCreateModalOpen}
+                open={isPositionModalOpen}
                 footer={null}
             >
                 <Form
-                    form={levelForm}
+                    form={positionForm}
                     layout="horizontal"
-                    onFinish={submitLevel}
+                    onFinish={submitPosition}
                     size='middle'
                     autoComplete="off"
                 >
@@ -553,14 +691,14 @@ function ProcessCreate() {
                         />
                     </Form.Item>
                     <ConfigProvider locale={locale}>
-                        <Form.Item label="当前层级名称" name="parentProcessName" >
+                        <Form.Item label="当前层级名称" name="parentPositionName" >
                             <Input
                                 disabled={true}
                             />
                         </Form.Item>
                     </ConfigProvider>
                     <ConfigProvider locale={locale}>
-                        <Form.Item label="当前层级编码" name="parentProcessCode" hidden={true}>
+                        <Form.Item label="当前层级编码" name="parentPositionCode" hidden={true}>
                             <Input
                                 disabled={true}
                             />
@@ -578,7 +716,26 @@ function ProcessCreate() {
                         </Form.Item>
                     </ConfigProvider>
                     <ConfigProvider locale={locale}>
-                        <Form.Item label="层级名称" name="processName" rules={[{ required: true, message: '层级名称必填' }]}>
+                        <Form.Item label="类型" name="type" rules={[{ required: true, message: '类型必选' }]}>
+                            <Select
+                                disabled={!isCreatePosition}
+                                allowClear
+                                options={[
+                                    {label:'部门', value:'DEPT'},
+                                    {label:'岗位', value:'POSITION'},
+                                ]}
+                                onChange={(value) => {
+                                    if (value === 'POSITION') {
+                                        setShowPosition(true)
+                                    } else {
+                                        setShowPosition(false)
+                                    }
+                                }}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="层级名称" name="name" rules={showPosition?[]:[{ required: true, message: '层级名称必填' }]} hidden={showPosition}>
                             <Input
                                 placeholder="请输入唯一的层级名称"
                                 allowClear
@@ -586,26 +743,24 @@ function ProcessCreate() {
                         </Form.Item>
                     </ConfigProvider>
                     <ConfigProvider locale={locale}>
-                        <Form.Item label="层级编码" name="processCode" rules={[{ required: true, message: '层级编码必填' }]}>
+                        <Form.Item label="层级编码" name="code" rules={showPosition?[]:[{ required: true, message: '层级编码必填' }]} hidden={showPosition}>
                             <Input
-                                disabled={!editCode}
+                                disabled={!isCreatePosition}
                                 placeholder="请输入唯一的层级编码"
                                 allowClear
                             />
                         </Form.Item>
                     </ConfigProvider>
                     <ConfigProvider locale={locale}>
-                        <Form.Item label="类型" name="type" rules={[{ required: true, message: '类型必选' }]}>
+                        <Form.Item label="岗位" name="code" rules={!showPosition?[]:[{ required: true, message: '岗位必填' }]} hidden={!showPosition}>
                             <Select
-                                disabled={!editCode}
+                                placeholder="请选择岗位"
                                 allowClear
-                                options={[
-                                    {label:'部门', value:'dept'},
-                                    {label:'岗位', value:'position'},
-                                ]}
+                                options={positions}
                             />
                         </Form.Item>
                     </ConfigProvider>
+
                     <ConfigProvider locale={locale}>
                         <Form.Item label="排序" name="sortIndex" rules={[{ required: true, message: '排序必选' }]}>
                             <Select
@@ -639,20 +794,143 @@ function ProcessCreate() {
                     <ConfigProvider locale={locale}>
                     <Form.Item label={null}>
                         <Flex justify={'flex-end'} align={'center'} gap={'small'}>
-                            <Button htmlType="button" onClick={onGenerateCode}>
+                            <Button htmlType="button" onClick={() => {onGenerateCode(positionForm, 'name', 'code')}}>
                                 自动生成编码
                             </Button>
                             <Button type="primary" htmlType="submit" >
                                 提交
                             </Button>
                             <Button htmlType="button" onClick={() => {
-                                levelForm.setFieldsValue({})
-                                setIsCreateModalOpen(false)
+                                positionForm.resetFields()
+                                setIsPositionModalOpen(false)
                             }}>
                                 取消
                             </Button>
                         </Flex>
                     </Form.Item>
+                    </ConfigProvider>
+                </Form>
+            </Modal>
+
+            <Modal
+                title={isCreateProcess ? "新增环节" : "编辑环节"}
+                closable={{ 'aria-label': 'Custom Close Button' }}
+                open={isProcessModelOpen}
+                footer={null}
+            >
+                <Form
+                    form={processForm}
+                    layout="horizontal"
+                    onFinish={submitProcess}
+                    size='middle'
+                    autoComplete="off"
+                >
+                    <Form.Item label="id" name="id" hidden={true}>
+                        <Input
+                            disabled={true}
+                        />
+                    </Form.Item>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="归属岗位编码" name="parentPositionCode" hidden={true}>
+                            <Select
+                                options={positions}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="环节名称" name="name" rules={[{ required: true, message: '环节名称必填' }]}>
+                            <Input
+                                placeholder="请输入唯一的环节名称"
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="环节编码" name="code" rules={[{ required: true, message: '环节编码必填' }]}>
+                            <Input
+                                placeholder="请输入唯一的环节编码"
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="环节类型" name="type" rules={[{ required: true, message: '环节类型必选' }]}>
+                            <Select
+                                placeholder="请选择环节类型"
+                                options={[
+                                    {label:'直接作业', value:'DIRECT_PROCESS'},
+                                    {label:'间接作业', value:'INDIRECT_PROCESS'},
+                                ]}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="匹配脚本" name="script"  rules={[{ required: true, message: '匹配脚本必填' }]}>
+                            <Input
+                                placeholder="请输入匹配脚本，需自行验证能否运行"
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="排序" name="sortIndex" rules={[{ required: true, message: '排序必选' }]}>
+                            <Select
+                                placeholder="请选择顺序"
+                                allowClear
+                                options={[
+                                    {label:'1', value:1},
+                                    {label:'2', value:2},
+                                    {label:'3', value:3},
+                                    {label:'4', value:4},
+                                    {label:'5', value:5},
+                                    {label:'6', value:6},
+                                    {label:'7', value:7},
+                                    {label:'8', value:8},
+                                    {label:'9', value:9},
+                                    {label:'10', value:10},
+                                ]}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <Divider />
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="作业最长时间(分钟)" name="maxTimeInMinute">
+                            <Input
+                                placeholder="请输入分钟数"
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="作业最小空闲时间(分钟)" name="minIdleTimeInMinute">
+                            <Input
+                                placeholder="请输入分钟数"
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label="是否向上汇总" name="workLoadRollUp" >
+                            <Radio.Group
+                                options={[
+                                    {label:'是', value:'true'},
+                                    {label:'否', value:'false'},
+                                ]}
+                            />
+                        </Form.Item>
+                    </ConfigProvider>
+                    <ConfigProvider locale={locale}>
+                        <Form.Item label={null}>
+                            <Flex justify={'flex-end'} align={'center'} gap={'small'}>
+                                <Button htmlType="button" onClick={() => {onGenerateCode(processForm, 'name', 'code')}}>
+                                    自动生成编码
+                                </Button>
+                                <Button type="primary" htmlType="submit" >
+                                    提交
+                                </Button>
+                                <Button htmlType="button" onClick={() => {
+                                    processForm.resetFields()
+                                    setIsProcessModelOpen(false)
+                                }}>
+                                    取消
+                                </Button>
+                            </Flex>
+                        </Form.Item>
                     </ConfigProvider>
                 </Form>
             </Modal>
