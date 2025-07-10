@@ -1092,6 +1092,7 @@ function ProcessCreate() {
             <Modal
                 title={"环节实施完成"}
                 closable={{ 'aria-label': 'Custom Close Button' }}
+                onCancel={() => setIsFinishModelOpen(false)}
                 open={isFinishModelOpen}
                 footer={null}
             >
