@@ -141,7 +141,14 @@ function ProcessCreate() {
                 if (id) {
                     postData.id = id
                 }
-                fetch('/api/v1/process/save', {
+                if (values.targetType === 'industry') {
+                    postData.targetCode = values.industryCode
+                } else if (values.targetType === 'subIndustry') {
+                    postData.targetCode = values.subIndustryCode
+                } else {
+                    postData.targetCode = values.workplaceCode
+                }
+                fetch('/api/v1/process/saveImplementation', {
                     method: 'POST', // 指定请求方法为POST
                     headers: {
                         'Content-Type': 'application/json', // 设置内容类型为JSON
@@ -271,7 +278,16 @@ function ProcessCreate() {
 
             setProcessImpl(data.data)
             changeTargetType(data.data.targetType)
-            baseInfoForm.setFieldsValue(data.data)
+            const formData = {...data.data}
+            if (formData.targetType === 'industry') {
+                formData.industryCode = formData.targetCode
+            } else if (formData.targetType === 'subIndustry') {
+                formData.subIndustryCode = formData.targetCode
+                formData.industryCode = formData.industryCode
+            } else {
+                formData.workplaceCode = formData.targetCode
+            }
+            baseInfoForm.setFieldsValue(formData)
         } catch (error) {
             console.error('获取环节实施失败:', error);
         }
@@ -583,7 +599,9 @@ function ProcessCreate() {
 
     // 初始化数据
     useEffect(() => {
-        getProcessImpl(id)
+        if (id) {
+            getProcessImpl(id)
+        }
         fetchWorkplace();
         fetchIndustry()
         fetchSubIndustry()
@@ -653,7 +671,7 @@ function ProcessCreate() {
                                     </Form.Item>
                                 </ConfigProvider>
                                 <ConfigProvider locale={locale}>
-                                    <Form.Item label="行业" name="targetCode" hidden={!showIndustry} rules={[{ required: true, message: '行业必选' }]}>
+                                    <Form.Item label="行业" name="industryCode" hidden={!showIndustry} rules={showIndustry?[{ required: true, message: '行业必选' }]:[]}>
                                         <Select
                                             placeholder="请选择行业"
                                             allowClear
@@ -662,7 +680,7 @@ function ProcessCreate() {
                                     </Form.Item>
                                 </ConfigProvider>
                                 <ConfigProvider locale={locale}>
-                                    <Form.Item label="子行业" name="targetCode" hidden={!showSubIndustry} rules={[{ required: true, message: '子行业必选' }]}>
+                                    <Form.Item label="子行业" name="subIndustryCode" hidden={!showSubIndustry} rules={showSubIndustry?[{ required: true, message: '子行业必选' }]:[]}>
                                         <Select
                                             placeholder="请选择子行业"
                                             allowClear
@@ -671,7 +689,7 @@ function ProcessCreate() {
                                     </Form.Item>
                                 </ConfigProvider>
                                 <ConfigProvider locale={locale}>
-                                    <Form.Item label="工作点" name="targetCode" hidden={!showWorkplace} rules={[{ required: true, message: '工作点必选' }]}>
+                                    <Form.Item label="工作点" name="workplaceCode" hidden={!showWorkplace} rules={showWorkplace?[{ required: true, message: '工作点必选' }]:[]}>
                                         <Select
                                             placeholder="请选择工作点"
                                             allowClear

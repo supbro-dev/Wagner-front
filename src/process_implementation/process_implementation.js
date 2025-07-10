@@ -3,47 +3,24 @@ import {
     Button,
     Card,
     Col,
-    ConfigProvider,
+    ConfigProvider, Flex,
     Form,
     Input,
-    Layout, message,
+    Layout, message, Popconfirm,
     Progress,
     Row,
     Select, Space,
     Spin,
-    Table,
+    Table, Tag,
     Typography
 } from "antd";
 import {Content} from "antd/es/layout/layout";
 import dayjs from "dayjs";
 import locale from "antd/locale/zh_CN";
 import React, {useEffect, useState} from "react";
+import {Link} from "react-router-dom";
 
 const showTotal = total => `共 ${total} 条`;
-
-const columns = [
-    { title: '实施名称', dataIndex: 'name', key: 'name', width: 150 },
-    { title: '实施目标类型', dataIndex: 'targetTypeDesc', key: 'targetTypeDesc' , width: 150},
-    { title: '实施目标名称', dataIndex: 'targetName', key: 'targetName' , width: 150},
-    { title: '状态', dataIndex: 'statusDesc', key: 'statusDesc' , width: 150},
-    { title: '操作', key:'operation', fixed: 'right', width: 150, render: (record) => {
-        if (record.status === 'online') {
-            return (
-                <Space>
-                    <Typography.Link>下线</Typography.Link>
-                </Space>
-            )
-        } else {
-            return (
-                <Space>
-                    <Typography.Link>上线</Typography.Link>
-                    <Typography.Link>编辑</Typography.Link>
-                </Space>
-            )
-        }
-
-        },},
-]
 
 
 function ProcessImplementation() {
@@ -54,6 +31,11 @@ function ProcessImplementation() {
     const [industries, setIndustries] = useState([])
     const [subIndustries, setSubIndustries] = useState([])
     const [isSearching, setIsSearching] = useState(false);
+    const [messageApi, contextHolder] = message.useMessage();
+
+    const error = (msg) => {
+        messageApi.error(msg);
+    };
 
 
     const onChange = async (pageNumber, pageSize) => {
@@ -178,6 +160,103 @@ function ProcessImplementation() {
         message.info('已重置筛选条件');
     };
 
+    const offlineImpl = async (id) => {
+        fetch('/api/v1/process/changeImplStatus', {
+            method: 'POST', // 指定请求方法为POST
+            headers: {
+                'Content-Type': 'application/json', // 设置内容类型为JSON
+            },
+            body: JSON.stringify({
+                id,
+                status:'offline'
+            }),
+        })
+            .then(response => response.json()) // 将响应解析为JSON
+            .then(data => {
+                if (data.code != 0) {
+                    error(data.msg)
+                } else {
+                    fetchData(form.getFieldsValue())
+                }
+            })
+            .catch((error) => {
+                error(error)
+                console.error('Error:', error);
+            });
+    }
+
+    const onlineImpl = async (id) => {
+        fetch('/api/v1/process/changeImplStatus', {
+            method: 'POST', // 指定请求方法为POST
+            headers: {
+                'Content-Type': 'application/json', // 设置内容类型为JSON
+            },
+            body: JSON.stringify({
+                id,
+                status:'online'
+            }),
+        })
+            .then(response => response.json()) // 将响应解析为JSON
+            .then(data => {
+                if (data.code !== 0) {
+                    error(data.msg)
+                } else {
+                    fetchData(form.getFieldsValue())
+                }
+            })
+            .catch((error) => {
+                error(error)
+                console.error('Error:', error);
+            });
+    }
+
+    const columns = [
+        { title: '实施名称', dataIndex: 'name', key: 'name', width: 150 },
+        { title: '实施目标类型', dataIndex: 'targetTypeDesc', key: 'targetTypeDesc' , width: 150},
+        { title: '实施目标名称', dataIndex: 'targetName', key: 'targetName' , width: 150},
+        { title: '状态', dataIndex: 'statusDesc', key: 'statusDesc' , width: 150, render: (value, record) => {
+                if (record.status === 'online') {
+                    return <Tag color={"#5dd621"} >已上线</Tag>
+                } else {
+                    return <Tag color={"#9d9d9f"} >已下线</Tag>
+                }
+            }},
+        { title: '操作', key:'operation', fixed: 'right', width: 150, render: (value, record) => {
+                if (record.status === 'online') {
+                    return (
+                        <Space>
+                            <Popconfirm
+                                title="请确认"
+                                description={"确认【下线】该环节实施吗"}
+                                onConfirm={() => offlineImpl(record.id)}
+                                okText="确定"
+                                cancelText="取消"
+                            >
+                                <Typography.Link >下线</Typography.Link>
+                            </Popconfirm>
+
+                        </Space>
+                    )
+                } else {
+                    return (
+                        <Space>
+                            <Popconfirm
+                                title="请确认"
+                                description={"确认【上线】该环节实施吗"}
+                                onConfirm={() => onlineImpl(record.id)}
+                                okText="确定"
+                                cancelText="取消"
+                            >
+                                <Typography.Link>上线</Typography.Link>
+                            </Popconfirm>
+                            <Link to={"/processCreate?id=" + record.id} component={Typography.Link} >编辑</Link>
+                        </Space>
+                    )
+                }
+
+            },},
+    ]
+
     // 初始化数据
     // 初始化工作点下拉选
     // 在组件挂载时获取工作点数据
@@ -189,6 +268,7 @@ function ProcessImplementation() {
 
     return (
         <div className="App">
+            {contextHolder}
             <Layout>
                 <Content>
                     {/* 面包屑导航 */}
@@ -304,7 +384,9 @@ function ProcessImplementation() {
                                 <h3 style={{ margin: 0 }}>环节实施列表</h3>
                             </div>
                         </div>
-
+                        <Flex justify={'flex-end'} align={'center'}>
+                            <Button type="primary"><Link to="/processCreate">新增</Link></Button>
+                        </Flex>
                         <Spin spinning={loading} tip="数据加载中...">
                             <ConfigProvider locale={locale}>
                                 <Table
