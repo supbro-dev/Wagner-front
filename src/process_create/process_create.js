@@ -16,7 +16,7 @@ import {
 } from 'antd';
 import {Content, Footer} from "antd/es/layout/layout";
 import locale from "antd/locale/zh_CN";
-import {useLocation} from "react-router-dom";
+import {Link, useLocation} from "react-router-dom";
 
 
 const stepItems = [
@@ -28,9 +28,6 @@ const stepItems = [
     },
     {
         title: '默认配置',
-    },
-    {
-        title: '完成',
     },
 ]
 
@@ -44,6 +41,7 @@ function ProcessCreate() {
     const [baseInfoForm] = Form.useForm();
     const [positionForm] = Form.useForm()
     const [processForm] = Form.useForm()
+    const [otherParamForm] = Form.useForm()
 
     const [processImpl, setProcessImpl] = useState({})
 
@@ -71,6 +69,7 @@ function ProcessCreate() {
 
     const [isCreateProcess, setIsCreateProcess] = useState(false)
     const [isProcessModelOpen, setIsProcessModelOpen] = useState(false)
+    const [isFinishModelOpen, setIsFinishModelOpen] = useState(false)
 
     const location = useLocation();
     // 使用 URLSearchParams 解析查询字符串
@@ -82,6 +81,11 @@ function ProcessCreate() {
     const error = (msg) => {
         messageApi.error(msg);
     };
+
+    const success = (msg, duration) => {
+        messageApi.success(msg, duration);
+    };
+
 
     const hideAll = () => {
         setBaseInfoShow(false)
@@ -102,6 +106,7 @@ function ProcessCreate() {
                 break
             case 2:
                 setOtherParamsShow(true)
+                fetchCalcParam()
                 break
             case 3:
                 setFinishShow(true)
@@ -243,6 +248,19 @@ function ProcessCreate() {
         }
     }
 
+    const fetchCalcParam = async () => {
+        try {
+            const response = await fetch('/api/v1/efficiency/findCalcParamByImplementationId?id=' + id);
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+            otherParamForm.setFieldsValue(data.data)
+        } catch (error) {
+            console.error('获取岗位失败:', error);
+        }
+    }
+
     const getProcessImpl = async (id) => {
         try {
             const response = await fetch('/api/v1/process/getImplementationById?id=' + id);
@@ -262,8 +280,13 @@ function ProcessCreate() {
 
     const next = () => {
         const current = currentStep
-        if (current == 0){
+        if (current === 0){
             submitBaseInfo()
+            onChangeStep(1)
+        } else if (current === 1) {
+            onChangeStep(2)
+        } else if (current === 2) {
+            submitOtherParam()
         }
     }
 
@@ -524,6 +547,39 @@ function ProcessCreate() {
                 )
             },},
     ]
+    const submitOtherParam = async () => {
+        otherParamForm.validateFields()
+            .then(values => {
+                const postData = values
+                if (id) {
+                    postData.processImplId = parseInt(id)
+                }
+
+                fetch('/api/v1/efficiency/saveOtherParams', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json', // 设置内容类型为JSON
+                    },
+                    body: JSON.stringify(postData),
+                })
+                    .then(response => response.json()) // 将响应解析为JSON
+                    .then(data => {
+                        if (data.code != 0) {
+                            error(data.msg)
+                        } else {
+                            setIsFinishModelOpen(true)
+                        }
+                    })
+                    .catch((err) => {
+                        error(err)
+                        console.error('Error:', err);
+                    });
+            })
+            .catch(errorInfo => {
+                console.log('验证失败:', errorInfo);
+            });
+    }
+
 
     // 初始化数据
     useEffect(() => {
@@ -654,10 +710,91 @@ function ProcessCreate() {
                         </Splitter>
                     </div>
                     <div hidden={!otherParamsShow}>
-                        otherParamsShow
-                    </div>
-                    <div hidden={!finishShow}>
-                        finishShow
+                        <Flex style={boxStyle} justify={'center'} align={'flex-start'}>
+                            <Form
+                                form={otherParamForm}
+                                layout="horizontal"
+                                onFinish={submitOtherParam}
+                                size='middle'
+                                style={{ maxWidth: 600 }}
+                                autoComplete="off"
+                            >
+                                <Form.Item label="processImplId" name="processImplId" hidden={true}>
+                                    <Input
+
+                                    />
+                                </Form.Item>
+                                <Typography.Title level={3} style={{ margin: 0 }}>
+                                    考勤配置
+                                </Typography.Title>
+                                <ConfigProvider locale={locale}>
+                                    <Form.Item label="考勤缺卡惩罚时长(小时)" name="attendanceAbsencePenaltyHour" rules={[{ required: true, message: '考勤缺卡惩罚时长必填' }]} tooltip={"考勤缺卡时当天最长的出勤时长限制"}>
+                                        <Input
+                                            placeholder="请输入考勤缺卡惩罚时长(小时)"
+                                            allowClear
+                                        />
+                                    </Form.Item>
+                                </ConfigProvider>
+                                <ConfigProvider locale={locale}>
+                                    <Form.Item label="最大开班时长(分钟)" name="maxRunUpTimeInMinute" rules={[{ required: true, message: '最大开班时长必填' }]} tooltip={"上班打卡到第一次作业开始允许的最长时间，超过该时长则认为是闲置"}>
+                                        <Input
+                                            placeholder="请输入最大开班时长(分钟)"
+                                            allowClear
+                                        />
+                                    </Form.Item>
+                                </ConfigProvider>
+                                <Typography.Title level={3} style={{ margin: 0 }}>
+                                    作业配置
+                                </Typography.Title>
+                                <ConfigProvider locale={locale}>
+                                    <Form.Item label="工作量统计单位" name="workLoadUnits" rules={[{ required: true, message: '工作量统计单位必填' }]} tooltip={"请填写直接作业中工作量的名称(中文:英文)，需要与直接作业数据中记录的单位保持一致。例如：件数:itemNum,SKU数:skuNum"}>
+                                        <Input
+                                            placeholder="请输入工作量统计单位"
+                                            allowClear
+                                        />
+                                    </Form.Item>
+                                </ConfigProvider>
+                                <ConfigProvider locale={locale}>
+                                    <Form.Item label="数据回溯天数" name="lookBackDays" rules={[{ required: true, message: '回溯数据天数必填' }]} tooltip={"在当天完成的作业数据，如果时x天前开始的，则直接舍弃"}>
+                                        <Input
+                                            placeholder="请输入数据回溯天数"
+                                            allowClear
+                                        />
+                                    </Form.Item>
+                                </ConfigProvider>
+                                <ConfigProvider locale={locale}>
+                                    <Form.Item label="作业的默认最长时间(分钟)" name="defaultMaxTimeInMinute" rules={[{ required: true, message: '作业的默认最长时间必填' }]} tooltip={"直接/间接作业如果超过x分钟，则进行截断"}>
+                                        <Input
+                                            placeholder="请输入作业的默认最长时间"
+                                            allowClear
+                                        />
+                                    </Form.Item>
+                                </ConfigProvider>
+                                <ConfigProvider locale={locale}>
+                                    <Form.Item label="作业的默认最小空闲时间(分钟)" name="defaultMinIdleTimeInMinute" rules={[{ required: true, message: '作业的默认最小空闲时间必填' }]} tooltip={"两个作业之间如果有小于x分钟的空闲，则归属为前一个完成的作业时长"}>
+                                        <Input
+                                            placeholder="请输入作业的默认最小空闲时间"
+                                            allowClear
+                                        />
+                                    </Form.Item>
+                                </ConfigProvider>
+                                <Typography.Title level={3} style={{ margin: 0 }}>
+                                    聚合计算配置
+                                </Typography.Title>
+                                <ConfigProvider locale={locale}>
+                                    <Form.Item label="跨小时作业的工作量记录方式" name="workLoadAggregateType" rules={[{ required: true, message: '跨小时作业的工作量记录方式必选' }]} tooltip={"一个作业时长超过一个小时，选择【结束小时】则工作量全部记录到作业结束的小时，选择【比例分摊】则工作量会按工作时长分摊到不同的小时中"}>
+                                        <Select
+                                            placeholder="请选择跨小时作业的工作量记录方式"
+                                            allowClear
+                                            options={[
+                                                {label:'结束小时', value:'end'},
+                                                {label:'比例分摊', value:'proportion'},
+                                            ]}
+                                        />
+                                    </Form.Item>
+                                </ConfigProvider>
+                            </Form>
+                        </Flex>
                     </div>
                 </Content>
 
@@ -933,6 +1070,14 @@ function ProcessCreate() {
                         </Form.Item>
                     </ConfigProvider>
                 </Form>
+            </Modal>
+            <Modal
+                title={"环节实施完成"}
+                closable={{ 'aria-label': 'Custom Close Button' }}
+                open={isFinishModelOpen}
+                footer={null}
+            >
+                点击跳转到<Link to="/processImplementation">环节实施列表</Link>
             </Modal>
         </>
     )
