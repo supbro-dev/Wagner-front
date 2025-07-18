@@ -264,7 +264,26 @@ function ProcessCreate() {
             const data = await response.json();
             otherParamForm.setFieldsValue(data.data)
         } catch (error) {
-            console.error('获取岗位失败:', error);
+            console.error('获取计算参数失败:', error);
+        }
+    }
+
+    const getWorkplace = async (workplaceCode) => {
+        try {
+            const response = await fetch('/api/v1/workplace/findWorkplaceByCode?workplaceCode=' + workplaceCode);
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            const data = await response.json();
+            const workplace = data.data
+
+            const impl = processImpl
+            impl.industryCode = workplace.industryCode
+            impl.subIndustryCode = workplace.subIndustryCode
+
+            setProcessImpl(impl)
+        } catch (error) {
+            console.error('获取工作点失败:', error);
         }
     }
 
@@ -276,17 +295,31 @@ function ProcessCreate() {
             }
             const data = await response.json();
 
-            setProcessImpl(data.data)
+
             changeTargetType(data.data.targetType)
             const formData = {...data.data}
+            const impl = data.data
             if (formData.targetType === 'industry') {
                 formData.industryCode = formData.targetCode
+
+                // 设置环节实施
+                impl.industryCode = formData.targetCode
+                impl.subIndustryCode = ''
+                setProcessImpl(impl)
             } else if (formData.targetType === 'subIndustry') {
                 formData.subIndustryCode = formData.targetCode
-                formData.industryCode = formData.industryCode
+
+                // 设置环节实施
+                impl.industryCode = formData.targetCode
+                impl.subIndustryCode = formData.industryCode
+                setProcessImpl(impl)
             } else {
                 formData.workplaceCode = formData.targetCode
+
+                getWorkplace(formData.targetCode)
             }
+
+
             baseInfoForm.setFieldsValue(formData)
         } catch (error) {
             console.error('获取环节实施失败:', error);
@@ -307,7 +340,22 @@ function ProcessCreate() {
     }
 
     const prev = () => {
+        const current = currentStep
+        if (current === 0){
+            return
+        }
 
+        hideAll()
+        if (current === 1) {
+            onChangeStep(0)
+            setBaseInfoShow(true)
+        } else if (current === 2) {
+            onChangeStep(1)
+            setProcessManagementShow(true)
+        } else if (current === 3) {
+            onChangeStep(2)
+            setOtherParamsShow(true)
+        }
     }
 
     const createProcess = (value) => {
