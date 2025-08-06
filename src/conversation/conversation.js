@@ -1,8 +1,10 @@
 import React, {useEffect, useState} from 'react';
 import {Bubble, Sender} from '@ant-design/x';
-import {App, Flex, message, Splitter, Tree} from "antd";
+import {CommentOutlined, CopyOutlined, SyncOutlined, UserOutlined} from '@ant-design/icons';
+import {App, Button, Drawer, Flex, Layout, message, Space, Splitter, Table, theme, Tree, Typography} from "antd";
 import {useLocation} from "react-router-dom";
-import {UserOutlined} from "@ant-design/icons";
+import markdownit from 'markdown-it';
+import {Content} from "antd/es/layout/layout";
 
 const fooAvatar = {
     // color: '#f56a00',
@@ -23,9 +25,11 @@ const userAvatar = {
     backgroundColor: '#87d068',
 };
 
+const md = markdownit({ html: true, breaks: true });
 
 
 const Conversation = () => {
+    const { token } = theme.useToken();
     const [value, setValue] = useState('');
     const [loading, setLoading] = useState(false);
     const [treeData, setTreeData] = useState([]);
@@ -33,6 +37,8 @@ const Conversation = () => {
     const [workGroupCode, setWorkGroupCode] = useState('');
     const [messageApi, contextHolder] = message.useMessage();
     const [sessionId, setSessionId] = useState('');
+    const [openDraw, setOpenDraw] = useState(false);
+    const [example, setExample] = useState({});
 
     const location = useLocation();
     // 使用 URLSearchParams 解析查询字符串
@@ -86,7 +92,9 @@ const Conversation = () => {
             setConversationList([{
                 avatar:aiAvatar,
                 placement:"start",
-                content:data.data
+                content:data.data,
+                isSelected:false,
+                type:"ai",
             }])
         } catch (error) {
             console.error('获取架构树失败:', error);
@@ -108,6 +116,8 @@ const Conversation = () => {
             avatar:userAvatar,
             placement:"end",
             content:question,
+            isSelected:false,
+            type:'human',
         });
 
         setConversationList(conversationList)
@@ -125,10 +135,21 @@ const Conversation = () => {
                 if (data.code != 0) {
                     error(data.msg)
                 } else {
+                    const {
+                        messageId,
+                        content,
+                        lastHumanMessageId,
+                    } = data.data
+                    const lastConversation = conversationList[conversationList.length - 1];
+                    lastConversation.id = lastHumanMessageId
+
                     conversationList.push({
                         avatar:aiAvatar,
                         placement:"start",
-                        content:data.data,
+                        content:content,
+                        isSelected:false,
+                        type:'ai',
+                        id: messageId,
                     });
 
                     setConversationList(conversationList)
@@ -141,7 +162,7 @@ const Conversation = () => {
             });
 
         } catch (error) {
-            console.error('获取架构树失败:', error);
+            console.error('跟AI助手对话失败:', error);
         }
     }
 
@@ -158,6 +179,132 @@ const Conversation = () => {
         setSessionId(sessionId);
     }
 
+    const renderMarkdown = content => {
+        console.log('content', content);
+        return (
+            <Typography>
+                {/* biome-ignore lint/security/noDangerouslySetInnerHtml: used in demo */}
+                <div dangerouslySetInnerHTML={{ __html: md.render(content) }} />
+            </Typography>
+        );
+    };
+
+    const clickConversation = (conversationId) => {
+        let brotherId
+        let needSelect = false
+        const ai = {}
+        const human = {}
+        for (let i = 0; i < conversationList.length; i++) {
+            let cvs = conversationList[i]
+            if (cvs.id !== conversationId) {
+                continue
+            }
+            if (cvs.isSelected) {
+                needSelect = false
+            } else {
+                needSelect = true
+            }
+
+            if (cvs.type === 'ai') {
+                // 如果点击的是AiMsg同时选中前一个HumanMsg
+                if (i - 1 >= 0) {
+                    conversationList[i - 1].isSelected = needSelect;
+                    cvs.isSelected = needSelect;
+
+                    const brother = conversationList[i - 1]
+                    brotherId = brother.id
+
+                    ai.content = cvs.content
+                    ai.id = conversationId
+                    human.content = brother.content
+                    human.id = brother.id
+                }
+            } else if (cvs.type === 'human'){
+                // 如果点击的是HumanMsg同时选中后一个AiMsg
+                if (i + 1 <= conversationList.length - 1) {
+                    conversationList[i + 1].isSelected = needSelect;
+                    cvs.isSelected = needSelect;
+
+                    const brother = conversationList[i + 1]
+                    brotherId = brother.id
+
+                    ai.content = brother.content
+                    ai.id = brother.id
+                    human.content = cvs.content
+                    human.id = conversationId
+                }
+            }
+        }
+
+        // 取消选择所有
+        for (let i = 0; i < conversationList.length; i++) {
+            if (conversationList[i].id !== conversationId && (brotherId && conversationList[i].id !== brotherId)) {
+                conversationList[i].isSelected = false;
+            }
+        }
+
+        setConversationList([...conversationList]);
+
+        if (needSelect && brotherId) {
+            setOpenDraw(true)
+            setExample({
+                ai: ai,
+                human:human,
+            })
+        }
+    }
+
+    const onCloseDraw = () => {
+        setOpenDraw(false)
+    }
+
+    const onCopy = async textToCopy => {
+        if (!textToCopy) return
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            message.success('已复制到剪贴板');
+        } catch (err) {
+            console.error('复制失败:', err);
+        }
+    };
+
+    const train = () => {
+        const postData = {
+            workplaceCode,
+            workGroupCode,
+            sessionId,
+            humanId: example["human"].id,
+            humanContent: example["human"].content,
+            aiId:example["ai"].id,
+            aiContent: example["ai"].content,
+        }
+        try {
+            fetch('/agentApi/v1/agent/train', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json', // 设置内容类型为JSON
+                },
+                body: JSON.stringify(postData),
+            })
+                .then(response => response.json()) // 将响应解析为JSON
+                .then(data => {
+                    if (data.code != 0) {
+                        error(data.msg)
+                    } else {
+
+                    }
+                })
+                .catch((err) => {
+                    error(err)
+                    console.error('Error:', err);
+                });
+
+        } catch (error) {
+            console.error('获取训练AI助手失败:', error);
+        }
+
+    }
+
     // 初始化数据
     useEffect(() => {
         if (workplaceCode) {
@@ -169,37 +316,95 @@ const Conversation = () => {
     const agentContentBubble = []
     for (const i in conversationList) {
         const conversation = conversationList[i]
-        agentContentBubble.push((<Bubble content={conversation.content} avatar={{ icon: <UserOutlined />, style: conversation.avatar }} placement={conversation.placement} />))
+        let bubble
+        if (conversation.type === 'ai') {
+            bubble = (
+                <Bubble content={conversation.content} messageRender={renderMarkdown}
+                        style={conversation.isSelected?{backgroundColor:"#b3e3a3"}:{}}
+                        avatar={{ icon: <UserOutlined />, style: conversation.avatar }} placement={conversation.placement}
+                        header={"AI组长助理"}
+                        footer={messageContext => {
+                            if (i === "0") {
+                                return
+                            }
+                            return (
+                                <Space size={token.paddingXXS}>
+                                    <Button color="default" variant="text" size="small" icon={<CommentOutlined />} onClick={() => {clickConversation(conversation.id)}} />
+                                    <Button
+                                        color="default"
+                                        variant="text"
+                                        size="small"
+                                        onClick={() => onCopy(messageContext)}
+                                        icon={<CopyOutlined />}
+                                    />
+                                </Space>
+                            )
+                        }
+                    }
+                />
+            )
+        } else {
+            bubble = (
+                <Bubble content={conversation.content}
+                              style={conversation.isSelected?{backgroundColor:"#b3e3a3"}:{}}
+                                footer={messageContext => (
+                                    <Space size={token.paddingXXS}>
+                                        <Button color="default" variant="text" size="small" icon={<CommentOutlined />} onClick={() => {clickConversation(conversation.id)}} />
+                                    </Space>
+                                )}
+                              avatar={{ icon: <UserOutlined />, style: conversation.avatar }} placement={conversation.placement} />
+            )
+        }
+        agentContentBubble.push(bubble)
     }
 
     return (
-        <Splitter style={{ height: '100%', boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)' }}>
-            <Splitter.Panel defaultSize="20%" min="20%" max="70%">
-                <Tree
-                    defaultExpandAll={true}
-                    onSelect={onSelectTreeNode}
-                    treeData={treeData}
-                />
-            </Splitter.Panel>
-            <Splitter.Panel>
-                <Flex vertical gap="middle">
-                    {agentContentBubble}
-                    {contextHolder}
-                    <Sender
-                        loading={loading}
-                        value={value}
-                        onChange={(v) => {
-                            setValue(v);
-                        }}
-                        onSubmit={submitQuestion}
-                        onCancel={() => {
-                            setLoading(false);
-                        }}
-                        autoSize={{ minRows: 2, maxRows: 6 }}
-                    />
-                </Flex>
-            </Splitter.Panel>
-        </Splitter>
+        <Layout >
+            <Content style={{ padding: '0 48px' }}>
+                <Splitter style={{ height: '100%', boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)' }}>
+                    <Splitter.Panel defaultSize="20%" min="20%" max="70%">
+                        <Tree
+                            defaultExpandAll={true}
+                            onSelect={onSelectTreeNode}
+                            treeData={treeData}
+                        />
+                    </Splitter.Panel>
+                    <Splitter.Panel>
+                        <Flex vertical gap="middle">
+                            {agentContentBubble}
+                            {contextHolder}
+                            <Sender
+                                loading={loading}
+                                value={value}
+                                onChange={(v) => {
+                                    setValue(v);
+                                }}
+                                onSubmit={submitQuestion}
+                                onCancel={() => {
+                                    setLoading(false);
+                                }}
+                                autoSize={{ minRows: 2, maxRows: 6 }}
+                            />
+                        </Flex>
+                    </Splitter.Panel>
+                </Splitter>
+                <Drawer
+                    title="训练AI组长助理"
+                    closable={{ 'aria-label': 'Close Button' }}
+                    open={openDraw}
+                    onClose={onCloseDraw}
+                    size={'large'}
+                >
+                    <Flex vertical gap="middle">
+                        <Bubble content={example["human"]?.content} messageRender={renderMarkdown}
+                                avatar={{ icon: <UserOutlined />, style: userAvatar }} placement={"end"} />
+                        <Bubble content={example["ai"]?.content}
+                                avatar={{ icon: <UserOutlined />, style: aiAvatar }} placement={"start"} />
+                    </Flex>
+                    <Button type="primary" onClick={train}>训练</Button>
+                </Drawer>
+            </Content>
+        </Layout>
     )
 
 }
