@@ -189,75 +189,6 @@ const Conversation = () => {
         );
     };
 
-    const clickConversation = (conversationId) => {
-        let brotherId
-        let needSelect = false
-        const ai = {}
-        const human = {}
-        for (let i = 0; i < conversationList.length; i++) {
-            let cvs = conversationList[i]
-            if (cvs.id !== conversationId) {
-                continue
-            }
-            if (cvs.isSelected) {
-                needSelect = false
-            } else {
-                needSelect = true
-            }
-
-            if (cvs.type === 'ai') {
-                // 如果点击的是AiMsg同时选中前一个HumanMsg
-                if (i - 1 >= 0) {
-                    conversationList[i - 1].isSelected = needSelect;
-                    cvs.isSelected = needSelect;
-
-                    const brother = conversationList[i - 1]
-                    brotherId = brother.id
-
-                    ai.content = cvs.content
-                    ai.id = conversationId
-                    human.content = brother.content
-                    human.id = brother.id
-                }
-            } else if (cvs.type === 'human'){
-                // 如果点击的是HumanMsg同时选中后一个AiMsg
-                if (i + 1 <= conversationList.length - 1) {
-                    conversationList[i + 1].isSelected = needSelect;
-                    cvs.isSelected = needSelect;
-
-                    const brother = conversationList[i + 1]
-                    brotherId = brother.id
-
-                    ai.content = brother.content
-                    ai.id = brother.id
-                    human.content = cvs.content
-                    human.id = conversationId
-                }
-            }
-        }
-
-        // 取消选择所有
-        for (let i = 0; i < conversationList.length; i++) {
-            if (conversationList[i].id !== conversationId && (brotherId && conversationList[i].id !== brotherId)) {
-                conversationList[i].isSelected = false;
-            }
-        }
-
-        setConversationList([...conversationList]);
-
-        if (needSelect && brotherId) {
-            setOpenDraw(true)
-            setExample({
-                ai: ai,
-                human:human,
-            })
-        }
-    }
-
-    const onCloseDraw = () => {
-        setOpenDraw(false)
-    }
-
     const onCopy = async textToCopy => {
         if (!textToCopy) return
         try {
@@ -268,42 +199,6 @@ const Conversation = () => {
         }
     };
 
-    const train = () => {
-        const postData = {
-            workplaceCode,
-            workGroupCode,
-            sessionId,
-            humanId: example["human"].id,
-            humanContent: example["human"].content,
-            aiId:example["ai"].id,
-            aiContent: example["ai"].content,
-        }
-        try {
-            fetch('/agentApi/v1/agent/train', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json', // 设置内容类型为JSON
-                },
-                body: JSON.stringify(postData),
-            })
-                .then(response => response.json()) // 将响应解析为JSON
-                .then(data => {
-                    if (data.code != 0) {
-                        error(data.msg)
-                    } else {
-
-                    }
-                })
-                .catch((err) => {
-                    error(err)
-                    console.error('Error:', err);
-                });
-
-        } catch (error) {
-            console.error('获取训练AI助手失败:', error);
-        }
-
-    }
 
     // 初始化数据
     useEffect(() => {
@@ -329,7 +224,6 @@ const Conversation = () => {
                             }
                             return (
                                 <Space size={token.paddingXXS}>
-                                    <Button color="default" variant="text" size="small" icon={<CommentOutlined />} onClick={() => {clickConversation(conversation.id)}} />
                                     <Button
                                         color="default"
                                         variant="text"
@@ -347,11 +241,6 @@ const Conversation = () => {
             bubble = (
                 <Bubble content={conversation.content}
                               style={conversation.isSelected?{backgroundColor:"#b3e3a3"}:{}}
-                                footer={messageContext => (
-                                    <Space size={token.paddingXXS}>
-                                        <Button color="default" variant="text" size="small" icon={<CommentOutlined />} onClick={() => {clickConversation(conversation.id)}} />
-                                    </Space>
-                                )}
                               avatar={{ icon: <UserOutlined />, style: conversation.avatar }} placement={conversation.placement} />
             )
         }
@@ -388,21 +277,6 @@ const Conversation = () => {
                         </Flex>
                     </Splitter.Panel>
                 </Splitter>
-                <Drawer
-                    title="训练AI组长助理"
-                    closable={{ 'aria-label': 'Close Button' }}
-                    open={openDraw}
-                    onClose={onCloseDraw}
-                    size={'large'}
-                >
-                    <Flex vertical gap="middle">
-                        <Bubble content={example["human"]?.content} messageRender={renderMarkdown}
-                                avatar={{ icon: <UserOutlined />, style: userAvatar }} placement={"end"} />
-                        <Bubble content={example["ai"]?.content}
-                                avatar={{ icon: <UserOutlined />, style: aiAvatar }} placement={"start"} />
-                    </Flex>
-                    <Button type="primary" onClick={train}>训练</Button>
-                </Drawer>
             </Content>
         </Layout>
     )
