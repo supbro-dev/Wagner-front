@@ -1,24 +1,19 @@
-import React, {useEffect, useState} from 'react';
+import {useEffect, useState} from 'react';
 import {Bubble, Prompts, Sender} from '@ant-design/x';
 import {
-    CommentOutlined,
     CopyOutlined,
     FireOutlined,
     SmileOutlined,
-    SyncOutlined,
     UserOutlined
 } from '@ant-design/icons';
 import {
-    App,
     Breadcrumb,
     Button,
-    Drawer,
     Flex,
     Layout,
     message,
     Space,
     Splitter,
-    Table,
     theme,
     Tree,
     Typography
@@ -27,15 +22,6 @@ import {useLocation} from "react-router-dom";
 import markdownit from 'markdown-it';
 import {Content} from "antd/es/layout/layout";
 
-const fooAvatar = {
-    // color: '#f56a00',
-    // backgroundColor: '#fde3cf',
-};
-
-const groupLeaderAgentAvatar = {
-    size: { xs: 24, sm: 32, md: 40, lg: 64, xl: 80, xxl: 100 },
-    src:"https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png",
-        style: fooAvatar }
 
 const aiAvatar = {
     color: '#f56a00',
@@ -58,17 +44,13 @@ const Conversation = () => {
     const [workGroupCode, setWorkGroupCode] = useState('');
     const [messageApi, contextHolder] = message.useMessage();
     const [sessionId, setSessionId] = useState('');
-    const [openDraw, setOpenDraw] = useState(false);
-    const [example, setExample] = useState({});
 
     const [response, setResponse] = useState('');
-    const [newAiBubble, setNewAiBubble] = useState({})
     const [showNewAiBubble, setShowNewAiBubble] = useState(false);
     const [showConfirmBubble, setShowConfirmBubble] = useState(false);
     const [confirmContent, setConfirmContent] = useState('')
     const [confirmTaskName, setConfirmTaskName] = useState('')
     const [confirmOptionList, setConfirmOptionList] = useState([])
-    const [confirmType, setConfirmType] = useState('')
     const [prompts, setPrompts] = useState([])
     const [showPrompts, setShowPrompts] = useState(false)
 
