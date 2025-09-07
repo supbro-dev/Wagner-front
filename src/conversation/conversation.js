@@ -97,24 +97,63 @@ const Conversation = () => {
     }
 
     const welcome = async (workplaceCode, workGroupCode, sessionId) => {
-        try {
-            const response = await fetch(`/agentApi/v1/agent/welcome?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}`);
-            if (!response.ok) {
-                throw new Error(`请求失败: ${response.status}`);
+        // 建立SSE连接
+        const eventSource = new EventSource(`/agentApi/v1/agent/welcome?workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
+
+        let showCurrentNewAiBubble = false
+        eventSource.onmessage = (event) => {
+            // 注意：SSE的默认事件类型是'message'，数据在event.data中
+            if (event.data) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.token) {
+                        if (!showCurrentNewAiBubble) {
+                            setShowNewAiBubble(true)
+                            showCurrentNewAiBubble = true
+                        }
+                        setResponse(prev => prev + data.token); // 增量更新
+                    }
+
+
+                } catch (e) {
+                    console.error('解析错误', e);
+                }
             }
-            const data = await response.json();
-
-            setConversationList([{
-                avatar:aiAvatar,
-                placement:"start",
-                content:data.data,
-                type:"ai",
-            }])
-
+        };
+        // 监听自定义的'done'事件
+        eventSource.addEventListener('done', () => {
+            eventSource.close();
+            setLoading(false);
             getFrequentlyAndUsuallyTasks(workplaceCode, workGroupCode)
-        } catch (error) {
-            console.error('获取架构树失败:', error);
-        }
+        });
+
+
+        eventSource.onerror = () => {
+            eventSource.close();
+            setLoading(false);
+        };
+
+
+
+
+        // try {
+        //     const response = await fetch(`/agentApi/v1/agent/welcome?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}`);
+        //     if (!response.ok) {
+        //         throw new Error(`请求失败: ${response.status}`);
+        //     }
+        //     const data = await response.json();
+        //
+        //     setConversationList([{
+        //         avatar:aiAvatar,
+        //         placement:"start",
+        //         content:data.data,
+        //         type:"ai",
+        //     }])
+        //
+        //     getFrequentlyAndUsuallyTasks(workplaceCode, workGroupCode)
+        // } catch (error) {
+        //     console.error('获取架构树失败:', error);
+        // }
     }
 
     const submitQuestion_ = async (question) => {
@@ -412,11 +451,11 @@ const Conversation = () => {
         for (const i in confirmOptionList) {
             const option = confirmOptionList[i]
             myConfirmOptionList.push((
-                <a href="javascript:void(0);" onClick={() => confirmResume(option.resumeType, option.resumeDesc, option.resumeMode)} >【{option.resumeDesc}】</a>
+                <a href="#" onClick={() => confirmResume(option.resumeType, option.resumeDesc, option.resumeMode)} >【{option.resumeDesc}】</a>
             ))
         }
         myConfirmOptionList.push((
-            <a href="javascript:void(0);" onClick={() => cancelResume(undefined)}>【取消】</a>
+            <a href="#" onClick={() => cancelResume(undefined)}>【取消】</a>
         ))
 
         return (
@@ -531,7 +570,7 @@ const Conversation = () => {
             setConversationList(conversationList)
 
             // 建立SSE连接
-            const eventSource = new EventSource(`/agentApi/v1/agent/stream?question=${encodeURIComponent(question)}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
+            const eventSource = new EventSource(`/agentApi/v1/agent/questionStream?question=${encodeURIComponent(question)}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
 
             let showCurrentNewAiBubble = false
             eventSource.onmessage = (event) => {
@@ -661,7 +700,8 @@ const Conversation = () => {
                             {contextHolder}
                             <Prompts title="🤔 你是不是想问:" items={prompts} hidden={!showPrompts} onItemClick={info => {
                                 if (info.data.type === 'advice') {
-                                    setValue(info.data.description)
+                                    const description = info.data.description
+                                    setValue(description.substring(0, description.indexOf("：")+ 1))
                                 } else if (info.data.type === 'executeTask') {
                                     submitQuestion(info.data.description);
                                 }
