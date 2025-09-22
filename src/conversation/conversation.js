@@ -241,6 +241,22 @@ const Conversation = () => {
         );
     };
 
+    const showStandardData = (msgId) => {
+        fetch(`/agentApi/v1/agent/getStandardDataByMsgId?msgId=${msgId}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`)
+            .then(response => response.json()) // 将响应解析为JSON
+            .then(data => {
+                if (data.code != 0) {
+                    error(data.msg)
+                } else {
+                    console.log(data)
+                }
+            })
+            .catch((err) => {
+                error(err)
+                console.error('Error:', err);
+            })
+    }
+
     const confirmResume = (resumeType, resumeDesc, resume_mode) => {
         setLoading(true)
 
@@ -347,12 +363,13 @@ const Conversation = () => {
             } catch (error) {
                 console.error('跟AI助手对话失败:', error);
             }
-        } else {
+        } else if (resume_mode === "stream"){
             // 使用流式方式resume
             // 建立SSE连接
             const eventSource = new EventSource(`/agentApi/v1/agent/resumeInterruptStream?resumeType=${resumeType}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
 
             let showCurrentNewAiBubble = false
+            let msgId = null
             eventSource.onmessage = (event) => {
                 // 注意：SSE的默认事件类型是'message'，数据在event.data中
                 if (event.data) {
@@ -362,6 +379,9 @@ const Conversation = () => {
                             if (!showCurrentNewAiBubble) {
                                 setShowNewAiBubble(true)
                                 showCurrentNewAiBubble = true
+                            }
+                            if (msgId == null) {
+                                msgId = data.msgId
                             }
                             setResponse(prev => prev + data.token); // 增量更新
                         } else if (data.interrupt) {
@@ -377,6 +397,7 @@ const Conversation = () => {
             eventSource.addEventListener('done', () => {
                 eventSource.close();
                 setLoading(false);
+                showStandardData(msgId)
             });
 
 
@@ -384,6 +405,9 @@ const Conversation = () => {
                 eventSource.close();
                 setLoading(false);
             };
+        } else {
+            // cancel类型
+            cancelResume(() => streamQuestion("试算任务:" + taskName))
         }
     }
 
@@ -451,7 +475,7 @@ const Conversation = () => {
         for (const i in confirmOptionList) {
             const option = confirmOptionList[i]
             myConfirmOptionList.push((
-                <a href="#" onClick={() => confirmResume(option.resumeType, option.resumeDesc, option.resumeMode)} >【{option.resumeDesc}】</a>
+                <a href="#" onClick={() => confirmResume(option.taskName, option.resumeType, option.resumeDesc, option.resumeMode)} >【{option.resumeDesc}】</a>
             ))
         }
         myConfirmOptionList.push((
@@ -539,79 +563,78 @@ const Conversation = () => {
         }
     }
 
+    const streamQuestion = (question) => {
+        setShowNewAiBubble(false)
+        setLoading(true);
+
+        const currentResponse = response
+        setResponse(''); // 清空旧响应
+        setValue('')
+
+        if (currentResponse) {
+            conversationList.push({
+                avatar:aiAvatar,
+                placement:"start",
+                content:currentResponse,
+                type:'ai',
+            });
+        }
+
+        // 用户提示直接显示
+        conversationList.push({
+            avatar:userAvatar,
+            placement:"end",
+            content:question,
+            type:'human',
+        });
+
+        setConversationList(conversationList)
+
+        // 建立SSE连接
+        const eventSource = new EventSource(`/agentApi/v1/agent/questionStream?question=${encodeURIComponent(question)}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
+
+        let showCurrentNewAiBubble = false
+        eventSource.onmessage = (event) => {
+            // 注意：SSE的默认事件类型是'message'，数据在event.data中
+            if (event.data) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.token) {
+                        if (!showCurrentNewAiBubble) {
+                            setShowNewAiBubble(true)
+                            showCurrentNewAiBubble = true
+                        }
+                        setResponse(prev => prev + data.token); // 增量更新
+                    } else if (data.interrupt) {
+                        const interrupt = JSON.parse(data.interrupt)
+                        showConfirm(interrupt.description, interrupt.confirmOptionList, interrupt.taskName)
+                    }
+                } catch (e) {
+                    console.error('解析错误', e);
+                }
+            }
+        };
+        // 监听自定义的'done'事件
+        eventSource.addEventListener('done', () => {
+            eventSource.close();
+            setLoading(false);
+        });
+
+
+        eventSource.onerror = () => {
+            eventSource.close();
+            setLoading(false);
+        };
+    }
+
 
 
     const submitQuestion = async (question) => {
-        const streamQuestion = () => {
-            setShowNewAiBubble(false)
-            setLoading(true);
-
-            const currentResponse = response
-            setResponse(''); // 清空旧响应
-            setValue('')
-
-            if (currentResponse) {
-                conversationList.push({
-                    avatar:aiAvatar,
-                    placement:"start",
-                    content:currentResponse,
-                    type:'ai',
-                });
-            }
-
-            // 用户提示直接显示
-            conversationList.push({
-                avatar:userAvatar,
-                placement:"end",
-                content:question,
-                type:'human',
-            });
-
-            setConversationList(conversationList)
-
-            // 建立SSE连接
-            const eventSource = new EventSource(`/agentApi/v1/agent/questionStream?question=${encodeURIComponent(question)}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
-
-            let showCurrentNewAiBubble = false
-            eventSource.onmessage = (event) => {
-                // 注意：SSE的默认事件类型是'message'，数据在event.data中
-                if (event.data) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        if (data.token) {
-                            if (!showCurrentNewAiBubble) {
-                                setShowNewAiBubble(true)
-                                showCurrentNewAiBubble = true
-                            }
-                            setResponse(prev => prev + data.token); // 增量更新
-                        } else if (data.interrupt) {
-                            const interrupt = JSON.parse(data.interrupt)
-                            showConfirm(interrupt.description, interrupt.confirmOptionList, interrupt.taskName)
-                        }
-                    } catch (e) {
-                        console.error('解析错误', e);
-                    }
-                }
-            };
-            // 监听自定义的'done'事件
-            eventSource.addEventListener('done', () => {
-                eventSource.close();
-                setLoading(false);
-            });
-
-
-            eventSource.onerror = () => {
-                eventSource.close();
-                setLoading(false);
-            };
-        }
-
-
         // 如果当前处于中断中，首先恢复流程
         if (showConfirmBubble) {
             setValue('')
             setLoading(true);
-            cancelResume(streamQuestion)
+            cancelResume(() => streamQuestion(question))
         } else {
             streamQuestion()
         }
