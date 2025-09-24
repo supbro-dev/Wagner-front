@@ -1,26 +1,12 @@
 import {useEffect, useState} from 'react';
 import {Bubble, Prompts, Sender} from '@ant-design/x';
-import {
-    CopyOutlined,
-    FireOutlined,
-    SmileOutlined,
-    UserOutlined
-} from '@ant-design/icons';
-import {
-    Breadcrumb,
-    Button,
-    Flex,
-    Layout,
-    message,
-    Space,
-    Splitter,
-    theme,
-    Tree,
-    Typography
-} from "antd";
+import {CopyOutlined, FireOutlined, SmileOutlined, UserOutlined} from '@ant-design/icons';
+import {Breadcrumb, Button, Flex, Layout, message, Space, Splitter, Table, theme, Tree, Typography} from "antd";
 import {useLocation} from "react-router-dom";
 import markdownit from 'markdown-it';
 import {Content} from "antd/es/layout/layout";
+import { Line } from '@ant-design/plots';
+import LineChart from "@ant-design/plots/es/components/line";
 
 
 const aiAvatar = {
@@ -46,13 +32,28 @@ const Conversation = () => {
     const [sessionId, setSessionId] = useState('');
 
     const [response, setResponse] = useState('');
+    const [conversationId, setConversationId] = useState(null)
+
+    // 临时窗口和标准数据
     const [showNewAiBubble, setShowNewAiBubble] = useState(false);
+    const [showCurrentTable, setShowCurrentTable] = useState(false);
+    const [showCurrentLineChart, setShowCurrentLineChart] = useState(false);
+
+    const [tableDataSource, setTableDataSource] = useState([]);
+    const [tableColumns, setTableColumns] = useState([]);
+
+    const [lineChartConfig, setLineChartConfig] = useState({});
+
     const [showConfirmBubble, setShowConfirmBubble] = useState(false);
     const [confirmContent, setConfirmContent] = useState('')
     const [confirmTaskName, setConfirmTaskName] = useState('')
     const [confirmOptionList, setConfirmOptionList] = useState([])
     const [prompts, setPrompts] = useState([])
     const [showPrompts, setShowPrompts] = useState(false)
+
+    // 标准化输出
+    // 表格
+    const [msgId2Data, setMsgId2Data] = useState({})
 
     const location = useLocation();
     // 使用 URLSearchParams 解析查询字符串
@@ -97,126 +98,39 @@ const Conversation = () => {
     }
 
     const welcome = async (workplaceCode, workGroupCode, sessionId) => {
-        // 建立SSE连接
-        const eventSource = new EventSource(`/agentApi/v1/agent/welcome?workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
-
-        let showCurrentNewAiBubble = false
-        eventSource.onmessage = (event) => {
-            // 注意：SSE的默认事件类型是'message'，数据在event.data中
-            if (event.data) {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.token) {
-                        if (!showCurrentNewAiBubble) {
-                            setShowNewAiBubble(true)
-                            showCurrentNewAiBubble = true
-                        }
-                        setResponse(prev => prev + data.token); // 增量更新
-                    }
-
-
-                } catch (e) {
-                    console.error('解析错误', e);
-                }
-            }
-        };
-        // 监听自定义的'done'事件
-        eventSource.addEventListener('done', () => {
-            eventSource.close();
-            setLoading(false);
-            getFrequentlyAndUsuallyTasks(workplaceCode, workGroupCode)
-        });
-
-
-        eventSource.onerror = () => {
-            eventSource.close();
-            setLoading(false);
-        };
-
-
-
-
-        // try {
-        //     const response = await fetch(`/agentApi/v1/agent/welcome?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}`);
-        //     if (!response.ok) {
-        //         throw new Error(`请求失败: ${response.status}`);
-        //     }
-        //     const data = await response.json();
-        //
-        //     setConversationList([{
-        //         avatar:aiAvatar,
-        //         placement:"start",
-        //         content:data.data,
-        //         type:"ai",
-        //     }])
-        //
-        //     getFrequentlyAndUsuallyTasks(workplaceCode, workGroupCode)
-        // } catch (error) {
-        //     console.error('获取架构树失败:', error);
-        // }
-    }
-
-    const submitQuestion_ = async (question) => {
-        setValue('');
         setLoading(true);
+        const showCurrentNewAiBubble = {current:false}
+        const lastMsgId = {current:null}
 
-        const postData = {
-            workplaceCode,
-            workGroupCode,
-            sessionId,
-            question,
-        }
-
-        conversationList.push({
-            avatar:userAvatar,
-            placement:"end",
-            content:question,
-            type:'human',
-        });
-
-        setConversationList(conversationList)
-
-        try {
-            fetch('/agentApi/v1/agent/question', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json', // 设置内容类型为JSON
-                },
-                body: JSON.stringify(postData),
-            })
-            .then(response => response.json()) // 将响应解析为JSON
-            .then(data => {
-                if (data.code != 0) {
-                    error(data.msg)
-                } else {
-                    const {
-                        messageId,
-                        content,
-                        lastHumanMessageId,
-                    } = data.data
-                    const lastConversation = conversationList[conversationList.length - 1];
-                    lastConversation.id = lastHumanMessageId
-
-                    conversationList.push({
-                        avatar:aiAvatar,
-                        placement:"start",
-                        content:content,
-                        type:'ai',
-                        id: messageId,
-                    });
-
-                    setConversationList(conversationList)
-                    setLoading(false)
+        doStream(`/agentApi/v1/agent/welcome?workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`,
+            (event) => {
+                // 注意：SSE的默认事件类型是'message'，数据在event.data中
+                if (event.data) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.token) {
+                            if (!showCurrentNewAiBubble.current) {
+                                setShowNewAiBubble(true)
+                                showCurrentNewAiBubble.current = true
+                            }
+                            if (!lastMsgId.current && data.msgId) {
+                                lastMsgId.current = data.msgId;
+                                setConversationId(data.msgId)
+                            }
+                            setResponse(prev => prev + data.token); // 增量更新
+                        }
+                    } catch (e) {
+                        console.error('解析错误', e);
+                    }
                 }
+            },
+            () => {
+                setLoading(false);
+                getFrequentlyAndUsuallyTasks(workplaceCode, workGroupCode)
+            },
+            () => {
+                setLoading(false);
             })
-            .catch((err) => {
-                error(err)
-                console.error('Error:', err);
-            });
-
-        } catch (error) {
-            console.error('跟AI助手对话失败:', error);
-        }
     }
 
     const getSessionId = () => {
@@ -240,22 +154,6 @@ const Conversation = () => {
             </Typography>
         );
     };
-
-    const showStandardData = (msgId) => {
-        fetch(`/agentApi/v1/agent/getStandardDataByMsgId?msgId=${msgId}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`)
-            .then(response => response.json()) // 将响应解析为JSON
-            .then(data => {
-                if (data.code != 0) {
-                    error(data.msg)
-                } else {
-                    console.log(data)
-                }
-            })
-            .catch((err) => {
-                error(err)
-                console.error('Error:', err);
-            })
-    }
 
     const confirmResume = (resumeType, resumeDesc, resume_mode) => {
         setLoading(true)
@@ -363,7 +261,7 @@ const Conversation = () => {
             } catch (error) {
                 console.error('跟AI助手对话失败:', error);
             }
-        } else if (resume_mode === "stream"){
+        } else {
             // 使用流式方式resume
             // 建立SSE连接
             const eventSource = new EventSource(`/agentApi/v1/agent/resumeInterruptStream?resumeType=${resumeType}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
@@ -397,7 +295,6 @@ const Conversation = () => {
             eventSource.addEventListener('done', () => {
                 eventSource.close();
                 setLoading(false);
-                showStandardData(msgId)
             });
 
 
@@ -405,9 +302,100 @@ const Conversation = () => {
                 eventSource.close();
                 setLoading(false);
             };
-        } else {
-            // cancel类型
-            cancelResume(() => streamQuestion("试算任务:" + taskName))
+        }
+    }
+
+    const fetchGet = (url, successHandler) => {
+        try {
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json', // 设置内容类型为JSON
+                },
+            })
+                .then(response => response.json()) // 将响应解析为JSON
+                .then(data => {
+                    if (data.code != 0) {
+                        error(data.msg)
+                    } else {
+                        if (successHandler) {
+                            successHandler(data)
+                        }
+                    }
+                })
+                .catch((err) => {
+                    error(err)
+                    console.error('Error:', err);
+                });
+
+        } catch (error) {
+            console.error('跟AI助手对话失败:', error);
+        }
+    }
+
+    const fetchPost = (url, data, successHandler) => {
+        try {
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json', // 设置内容类型为JSON
+                },
+                body: JSON.stringify(data),
+            })
+                .then(response => response.json()) // 将响应解析为JSON
+                .then(data => {
+                    if (data.code != 0) {
+                        error(data.msg)
+                    } else {
+                        if (successHandler) {
+                            successHandler()
+                        }
+                    }
+                })
+                .catch((err) => {
+                    error(err)
+                    console.error('Error:', err);
+                });
+
+        } catch (error) {
+            console.error('跟AI助手对话失败:', error);
+        }
+    }
+
+    const doStream = (url, onmessageHandler, finishHandler, errorHandler) => {
+        // 建立SSE连接
+        const eventSource = new EventSource(url);
+
+        eventSource.onmessage = (event) => {
+            // 注意：SSE的默认事件类型是'message'，数据在event.data中
+            if (event.data) {
+                if (onmessageHandler) {
+                    onmessageHandler(event);
+                }
+            }
+        };
+        // 监听自定义的'done'事件
+        eventSource.addEventListener('done', () => {
+            eventSource.close();
+            if (finishHandler) {
+                finishHandler()
+            }
+        });
+
+        eventSource.onerror = () => {
+            eventSource.close();
+            if (errorHandler) {
+                errorHandler()
+            }
+        };
+    }
+
+    const confirmThis = (confirmType, confirmContent, question) => {
+        if (confirmType === 'invoke') {
+
+        } else if (confirmType === 'question') {
+            clearConfirm()
+            submitQuestionStream(question)
         }
     }
 
@@ -475,7 +463,8 @@ const Conversation = () => {
         for (const i in confirmOptionList) {
             const option = confirmOptionList[i]
             myConfirmOptionList.push((
-                <a href="#" onClick={() => confirmResume(option.taskName, option.resumeType, option.resumeDesc, option.resumeMode)} >【{option.resumeDesc}】</a>
+                <a href="#" onClick={() => confirmThis(option.confirmType, option.confirmDesc, option.question)} >【{option.confirmDesc}】</a>
+                // <a href="#" onClick={() => confirmResume(option.resumeType, option.resumeDesc, option.resumeMode)} >【{option.confirmDesc}】</a>
             ))
         }
         myConfirmOptionList.push((
@@ -497,15 +486,13 @@ const Conversation = () => {
         setConfirmTaskName(taskName)
     }
 
-    const onCopy = async textToCopy => {
-        if (!textToCopy) return
-        try {
-            await navigator.clipboard.writeText(textToCopy);
-            message.success('已复制到剪贴板');
-        } catch (err) {
-            console.error('复制失败:', err);
-        }
-    };
+    const clearConfirm = () => {
+        setShowConfirmBubble(false)
+        setConfirmContent('')
+        setConfirmOptionList([])
+        setConfirmTaskName('')
+    }
+
 
     const getFrequentlyAndUsuallyTasks = (workplaceCode, workGroupCode) => {
         try {
@@ -526,7 +513,7 @@ const Conversation = () => {
                             const taskName = data.data.result[i]
                             items.push(
                                 {
-                                    key: 'taskName',
+                                    key: taskName,
                                     type: 'executeTask',
                                     icon: <FireOutlined style={{ color: '#FF4D4F' }} />,
                                     description: '执行任务: ' + taskName,
@@ -543,7 +530,7 @@ const Conversation = () => {
                             disabled: false,
                         })
                         items.push({
-                            key: '0',
+                            key: '1',
                             type: 'advice',
                             icon: <SmileOutlined style={{ color: '#FAAD14' }} />,
                             description: '编辑任务：请输入你想编辑的任务名称',
@@ -563,81 +550,255 @@ const Conversation = () => {
         }
     }
 
-    const streamQuestion = (question) => {
-        setShowNewAiBubble(false)
-        setLoading(true);
 
-        const currentResponse = response
-        setResponse(''); // 清空旧响应
-        setValue('')
+    const checkConfirm =  async () => {
+        try {
+            fetch(`/agentApi/v1/agent/getStateProperties?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}&statePropertyNames=is_integrated,task_name,intent_type`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json', // 设置内容类型为JSON
+                },
+            })
+                .then(response => response.json()) // 将响应解析为JSON
+                .then(data => {
+                    if (data.code != 0) {
+                        error(data.msg)
+                    } else {
+                        const {
+                            is_integrated,
+                            intent_type,
+                            task_name,
+                        } = data.data.result
+                        if (is_integrated && intent_type !== 'test_run') {
+                            const myTaskName = task_name
+                            const options = [
+                                {confirmDesc:"试跑任务", confirmType:"question", question:"试跑任务:" + myTaskName},
+                                {confirmDesc:"保存任务", confirmType:"question", question:"保存任务:" + myTaskName},
+                            ]
+                            showConfirm("任务模板已经填写完整，请确认下一步操作：", options,
+                                myTaskName)
+                        }
+                    }
+                })
+                .catch((err) => {
+                    error(err)
+                    console.error('Error:', err);
+                });
 
-        if (currentResponse) {
-            conversationList.push({
-                avatar:aiAvatar,
-                placement:"start",
-                content:currentResponse,
-                type:'ai',
-            });
+        } catch (error) {
+            console.error('跟AI助手对话失败:', error);
+        }
+    }
+
+    const renderStandardLineChart = (jsonObj, msgId) => {
+        const xValues = jsonObj.x_axis
+        const yValues = jsonObj.y_axis
+        const xName = jsonObj.x_name
+        const yName = jsonObj.y_name
+
+        const data = []
+        for (let i = 0; i < xValues.length; i++) {
+            const x = xValues[i]
+            const y = yValues[i]
+            data.push({x:x, y:y})
         }
 
-        // 用户提示直接显示
-        conversationList.push({
-            avatar:userAvatar,
-            placement:"end",
-            content:question,
-            type:'human',
-        });
-
-        setConversationList(conversationList)
-
-        // 建立SSE连接
-        const eventSource = new EventSource(`/agentApi/v1/agent/questionStream?question=${encodeURIComponent(question)}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`);
-
-        let showCurrentNewAiBubble = false
-        eventSource.onmessage = (event) => {
-            // 注意：SSE的默认事件类型是'message'，数据在event.data中
-            if (event.data) {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.token) {
-                        if (!showCurrentNewAiBubble) {
-                            setShowNewAiBubble(true)
-                            showCurrentNewAiBubble = true
-                        }
-                        setResponse(prev => prev + data.token); // 增量更新
-                    } else if (data.interrupt) {
-                        const interrupt = JSON.parse(data.interrupt)
-                        showConfirm(interrupt.description, interrupt.confirmOptionList, interrupt.taskName)
-                    }
-                } catch (e) {
-                    console.error('解析错误', e);
-                }
+        const config = {
+            width:800,
+            height:600,
+            data,
+            xField: 'x',
+            yField: 'y',
+            point: {
+                shapeField: 'square',
+                sizeField: 4,
+            },
+            interaction: {
+                tooltip: {
+                    marker: false,
+                },
+            },
+            style: {
+                lineWidth: 2,
+            },
+            axis: {
+                // 配置 x 轴
+                x: {
+                    title:xName,
+                },
+                y: {
+                    title:yName,
+                },
             }
         };
-        // 监听自定义的'done'事件
-        eventSource.addEventListener('done', () => {
-            eventSource.close();
-            setLoading(false);
-        });
 
+        setMsgId2Data(prev => {
+            prev[msgId] = {
+                config,
+                type:'折线图',
+            }
+            return prev
+        })
 
-        eventSource.onerror = () => {
-            eventSource.close();
-            setLoading(false);
-        };
+        setShowCurrentLineChart(true)
+        setLineChartConfig(config)
+    }
+
+    const renderStandardTable = (jsonObj, msgId) => {
+        const headerList = jsonObj.header_list
+        const dataList = jsonObj.data_list
+
+        const index2key = {}
+        const columns = headerList.map((item, index) => {
+            index2key[index] = item
+            return {
+                title: item,
+                dataIndex: item,
+                key: item
+            }
+        })
+
+        const dataSource = dataList.map((itemList, index) => {
+            const data = {
+                key: index,
+            }
+            itemList.forEach((item, propIndex) => {
+                const propName = index2key[propIndex]
+                data[propName] = item
+            })
+            return data
+        })
+
+        setMsgId2Data(prev => {
+            prev[msgId] = {
+                columns,
+                dataSource,
+                type:'表格',
+            }
+            return prev
+        })
+
+        setShowCurrentTable(true)
+        setTableDataSource(dataSource)
+        setTableColumns(columns)
+    }
+
+    const checkShowStandardData = async (msgId) => {
+        fetchGet(`/agentApi/v1/agent/getStateProperties?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}&statePropertyNames=last_run_msg_id,last_standard_data,task_detail`,
+            (data) => {
+                const {
+                    last_run_msg_id,
+                    last_standard_data,
+                    task_detail
+                } = data.data.result
+                if (last_run_msg_id === msgId) {
+                    if (task_detail.dataFormat === "表格") {
+                        renderStandardTable(JSON.parse(last_standard_data.replaceAll("'", "\"")), msgId)
+                    } else if (task_detail.dataFormat === "折线图") {
+                        renderStandardLineChart(JSON.parse(last_standard_data.replaceAll("'", "\"")), msgId)
+                    }
+                }
+            })
+    }
+
+    const updateAiConversationList = (content, msgId) => {
+        setShowNewAiBubble(false)
+
+        const theList = conversationList
+        theList.push({
+            avatar: aiAvatar,
+            placement: "start",
+            content: content,
+            type: 'ai',
+            msgId: msgId,
+        })
+        setConversationList(theList)
+    }
+
+    const updateUserConversationList = (content) => {
+        setShowNewAiBubble(false)
+
+        const theList = conversationList
+        theList.push({
+            avatar:userAvatar,
+            placement:"end",
+            content:content,
+            type:'human',
+        })
+        setConversationList(theList)
+    }
+
+    const clearCurrentStandardData = () => {
+        setShowCurrentTable(false)
+        setTableDataSource([])
+        setTableColumns([])
+
+        setShowCurrentLineChart(false)
+        setLineChartConfig({})
     }
 
 
+    const submitQuestionStream = async (question) => {
+        setLoading(true);
 
-    const submitQuestion = async (question) => {
-        // 如果当前处于中断中，首先恢复流程
-        if (showConfirmBubble) {
-            setValue('')
-            setLoading(true);
-            cancelResume(() => streamQuestion(question))
-        } else {
-            streamQuestion()
+        // 更新AI对话
+        if (response) {
+            // 更新实时bubble到list
+            updateAiConversationList(response, conversationId)
+
+            setResponse(''); // 清空旧响应
+            setConversationId(null); // 清空旧响应
+
+            clearCurrentStandardData()
         }
+
+        // 更新用户对话
+        if (question) {
+            updateUserConversationList(question)
+            setValue('')
+        }
+
+        const showCurrentNewAiBubble = {current:false}
+        const lastMsgId = {current:null}
+
+        doStream(`/agentApi/v1/agent/questionStream?question=${encodeURIComponent(question)}&workplaceCode=${workplaceCode}&sessionId=${sessionId}&workGroupCode=${workGroupCode}`,
+            (event) => {
+                if (event.data) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.token) {
+                            if (!showCurrentNewAiBubble.current) {
+                                setShowNewAiBubble(true)
+                                showCurrentNewAiBubble.current = true
+                            }
+                            setResponse(prev => prev + data.token); // 增量更新
+                        } else if (data.interrupt) {
+                            // 仅保存、删除时二次确认用到
+                            const interrupt = JSON.parse(data.interrupt)
+                            showConfirm(interrupt.description, interrupt.confirmOptionList, interrupt.taskName)
+                        }
+
+                        if (data.msgId) {
+                            lastMsgId.current = data.msgId
+                        }
+                    } catch (e) {
+                        console.error('解析错误', e);
+                    }
+                }
+            },
+            () => {
+                setLoading(false);
+                console.log(lastMsgId.current);
+                setConversationId(lastMsgId.current)
+                // 检查是否需要主动弹出确认
+                checkConfirm()
+                // 检查是否需要显示标准数据
+                checkShowStandardData(lastMsgId.current)
+            },
+            () => {
+                setLoading(false);
+            }
+        )
     };
 
 
@@ -649,12 +810,13 @@ const Conversation = () => {
         getSessionId()
     }, []);
 
+    // 性能优化一下
+    // 显示对话框
     const agentContentBubble = []
     for (const i in conversationList) {
         const conversation = conversationList[i]
-        let bubble
         if (conversation.type === 'ai') {
-            bubble = (
+            const bubble = (
                 <Bubble content={conversation.content} messageRender={renderMarkdown}
                         avatar={{ icon: <UserOutlined />, style: conversation.avatar }} placement={conversation.placement}
                         header={"AI数据员"}
@@ -662,28 +824,65 @@ const Conversation = () => {
                             if (i === "0") {
                                 return
                             }
-                            return (
-                                <Space size={token.paddingXXS}>
-                                    <Button
-                                        color="default"
-                                        variant="text"
-                                        size="small"
-                                        onClick={() => onCopy(messageContext)}
-                                        icon={<CopyOutlined />}
-                                    />
-                                </Space>
-                            )
+                            // return (
+                            //     <Space size={token.paddingXXS}>
+                            //         <Button
+                            //             color="default"
+                            //             variant="text"
+                            //             size="small"
+                            //             onClick={() => onCopy(messageContext)}
+                            //             icon={<CopyOutlined />}
+                            //         />
+                            //     </Space>
+                            // )
                         }
-                    }
+                        }
                 />
             )
+
+            agentContentBubble.push(bubble)
+            const standardData = msgId2Data[conversation.msgId]
+            if (standardData) {
+                if (standardData.type === '表格') {
+                    const {
+                        dataSource,
+                        columns,
+                    } = standardData
+                    const table = (
+                        <Flex vertical={false} gap="middle" >
+                            <Table dataSource={dataSource} columns={columns} style={{width: '55%'}} size={'small'}/>
+                        </Flex>
+                    )
+                    agentContentBubble.push(table)
+                } else if (standardData.type === '折线图') {
+                    const {
+                        config
+                    } = standardData
+                    const table = (
+                        <Flex vertical={false} gap="middle" >
+                            <Line {...config} />
+                        </Flex>
+                    )
+                    agentContentBubble.push(table)
+                }
+            }
         } else {
-            bubble = (
+            const bubble = (
                 <Bubble content={conversation.content}
-                              avatar={{ icon: <UserOutlined />, style: conversation.avatar }} placement={conversation.placement} />
+                        avatar={{ icon: <UserOutlined />, style: conversation.avatar }} placement={conversation.placement} />
             )
+
+            agentContentBubble.push(bubble)
         }
-        agentContentBubble.push(bubble)
+    }
+
+    // 显示临时标准化数据
+    const standardDataContent = []
+    if (showCurrentTable) {
+        standardDataContent.push(<Table dataSource={tableDataSource} columns={tableColumns} style={{width: '55%'}} size={'small'}/>)
+    }
+    if (showCurrentLineChart) {
+        standardDataContent.push(<Line {...lineChartConfig} />)
     }
 
     return (
@@ -716,17 +915,22 @@ const Conversation = () => {
                                     avatar={{ icon: <UserOutlined />, style: aiAvatar }} placement={"start"}
                                     header={"AI数据员"}
                             />
+                            <Flex vertical={false} gap="middle" >
+                                {standardDataContent}
+                            </Flex>
+
                             <Bubble content={confirmContent} messageRender={renderConfirm} style={showConfirmBubble?{}:{visibility: 'hidden'}}
                                     avatar={{ icon: <UserOutlined />, style: aiAvatar }} placement={"start"}
                                     header={"AI数据员"}
                             />
                             {contextHolder}
+
                             <Prompts title="🤔 你是不是想问:" items={prompts} hidden={!showPrompts} onItemClick={info => {
                                 if (info.data.type === 'advice') {
                                     const description = info.data.description
                                     setValue(description.substring(0, description.indexOf("：")+ 1))
                                 } else if (info.data.type === 'executeTask') {
-                                    submitQuestion(info.data.description);
+                                    submitQuestionStream(info.data.description);
                                 }
                             }}/>
                             <Sender
@@ -735,7 +939,7 @@ const Conversation = () => {
                                 onChange={(v) => {
                                     setValue(v);
                                 }}
-                                onSubmit={submitQuestion}
+                                onSubmit={submitQuestionStream}
                                 onCancel={() => {
                                     setLoading(false);
                                 }}
