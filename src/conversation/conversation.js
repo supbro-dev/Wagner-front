@@ -401,25 +401,17 @@ const Conversation = () => {
 
     const cancelResume = (otherFun) => {
         // 隐藏确认提示框
-        setShowConfirmBubble(false)
-        setConfirmContent('')
-        setConfirmTaskName('')
+        clearConfirm()
 
-        // 归档AI最新对话
-        const currentResponse = response
-        setResponse(''); // 清空旧响应
+        // 更新AI对话
+        if (response) {
+            // 更新实时bubble到list
+            updateAiConversationList(response, conversationId)
 
-        if (currentResponse) {
-            const newConversationList = [...conversationList, {
-                avatar:aiAvatar,
-                placement:"start",
-                content:currentResponse,
-                type:'ai',
-            }]
+            setResponse(''); // 清空旧响应
+            setConversationId(null); // 清空旧响应
 
-            setConversationList(newConversationList)
-            // 掩藏AI最新对话框
-            setShowNewAiBubble(false)
+            clearCurrentStandardData()
         }
 
         const postData = {
@@ -464,7 +456,6 @@ const Conversation = () => {
             const option = confirmOptionList[i]
             myConfirmOptionList.push((
                 <a href="#" onClick={() => confirmThis(option.confirmType, option.confirmDesc, option.question)} >【{option.confirmDesc}】</a>
-                // <a href="#" onClick={() => confirmResume(option.resumeType, option.resumeDesc, option.resumeMode)} >【{option.confirmDesc}】</a>
             ))
         }
         myConfirmOptionList.push((
@@ -553,7 +544,7 @@ const Conversation = () => {
 
     const checkConfirm =  async () => {
         try {
-            fetch(`/agentApi/v1/agent/getStateProperties?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}&statePropertyNames=is_integrated,task_name,intent_type`, {
+            fetch(`/agentApi/v1/agent/getStateProperties?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}&statePropertyNames=intent_type,is_integrated,task_name`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json', // 设置内容类型为JSON
@@ -565,11 +556,12 @@ const Conversation = () => {
                         error(data.msg)
                     } else {
                         const {
-                            is_integrated,
                             intent_type,
+                            is_integrated,
                             task_name,
                         } = data.data.result
-                        if (is_integrated && intent_type !== 'test_run') {
+                        if (is_integrated && ["CREATE", "EDIT", "TEST_RUN"].includes(intent_type)) {
+                            // 只要任务完整，每次都提示试跑或保存
                             const myTaskName = task_name
                             const options = [
                                 {confirmDesc:"试跑任务", confirmType:"question", question:"试跑任务:" + myTaskName},
@@ -684,14 +676,15 @@ const Conversation = () => {
     }
 
     const checkShowStandardData = async (msgId) => {
-        fetchGet(`/agentApi/v1/agent/getStateProperties?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}&statePropertyNames=last_run_msg_id,last_standard_data,task_detail`,
+        fetchGet(`/agentApi/v1/agent/getStateProperties?workplaceCode=${workplaceCode}&workGroupCode=${workGroupCode}&sessionId=${sessionId}&statePropertyNames=intent_type,last_run_msg_id,last_standard_data,task_detail`,
             (data) => {
                 const {
+                    intent_type,
                     last_run_msg_id,
                     last_standard_data,
                     task_detail
                 } = data.data.result
-                if (last_run_msg_id === msgId) {
+                if (last_run_msg_id === msgId && last_standard_data && !["EXECUTE","DELETE"].includes(intent_type)) {
                     if (task_detail.dataFormat === "表格") {
                         renderStandardTable(JSON.parse(last_standard_data.replaceAll("'", "\"")), msgId)
                     } else if (task_detail.dataFormat === "折线图") {
@@ -908,7 +901,7 @@ const Conversation = () => {
                             treeData={treeData}
                         />
                     </Splitter.Panel>
-                    <Splitter.Panel>
+                    <Splitter.Panel >
                         <Flex vertical gap="middle">
                             {agentContentBubble}
                             <Bubble content={response} messageRender={renderMarkdown} style={showNewAiBubble?{}:{visibility: 'hidden'}}
