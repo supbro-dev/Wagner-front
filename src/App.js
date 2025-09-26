@@ -1,6 +1,5 @@
 import React from 'react';
 import EmployeeEfficiency from './employee_efficiency/employee_efficiency'; // 导入组件
-import Conversation from "./conversation/conversation";
 import ProcessImplementation from './process_implementation/process_implementation';
 import TimeOnTask from './time_on_task/time_on_task';
 import WorkplaceEfficiency from './workplace_efficiency/workplace_efficiency';
@@ -19,7 +18,6 @@ function App() {
                 <Route path="/workplaceEfficiency" element={<WorkplaceEfficiency />} />
                 <Route path="/processImplementation" element={<ProcessImplementation />} />
                 <Route path="/processCreate" element={<ProcessCreate />} />
-                <Route path="/conversation" element={<Conversation />} />
             </Routes>
         </BrowserRouter>
     );
